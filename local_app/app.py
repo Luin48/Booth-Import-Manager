@@ -4,6 +4,7 @@ import json
 import mimetypes
 import uuid
 import atexit
+import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -87,6 +88,8 @@ class AppHandler(BaseHTTPRequestHandler):
             self._hide_assets(data)
         elif path == "/api/config":
             self._save_config(data)
+        elif path == "/api/shutdown":
+            self._shutdown()
         else:
             self._json({"error": "not found"}, 404)
 
@@ -197,6 +200,11 @@ class AppHandler(BaseHTTPRequestHandler):
         cfg.save()
         reload_config()
         self._json({"status": "saved"})
+
+    def _shutdown(self) -> None:
+        cleanup_final_records_on_start()
+        self._json({"status": "shutting_down"})
+        threading.Thread(target=self.server.shutdown, daemon=True).start()
 
     def _static(self, path: str) -> None:
         root = RESOURCE_DIR / "webui"

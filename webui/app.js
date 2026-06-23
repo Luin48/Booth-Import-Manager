@@ -328,5 +328,14 @@ $("applyTagBtn").addEventListener("click", async () => {
   setStatus(`${state.selected.size}개 태그 적용`);
 });
 
+window.addEventListener("pagehide", () => {
+  const payload = new Blob(["{}"], { type: "application/json" });
+  if (navigator.sendBeacon) {
+    navigator.sendBeacon("/api/shutdown", payload);
+  } else {
+    fetch("/api/shutdown", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" }, keepalive: true }).catch(() => {});
+  }
+});
+
 initTheme();
 loadAll().catch((error) => setStatus(`오류: ${error.message}`));

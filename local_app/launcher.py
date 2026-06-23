@@ -32,14 +32,22 @@ def main() -> None:
         thread = threading.Thread(target=server.serve_forever, daemon=True)
         thread.start()
         time.sleep(0.4)
+    else:
+        server = None
+        thread = None
 
     webbrowser.open(url)
 
     try:
-        while True:
-            time.sleep(3600)
+        if thread is None:
+            return
+        while thread.is_alive():
+            time.sleep(0.5)
     except KeyboardInterrupt:
         return
+    finally:
+        if server:
+            server.server_close()
 
 
 if __name__ == "__main__":
