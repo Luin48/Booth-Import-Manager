@@ -1,4 +1,4 @@
-# Booth Import Manager
+﻿# Booth Import Manager
 
 Booth에서 받은 Unity 에셋 파일을 지정 폴더로 옮기고, 태그별 Unity 임포트 큐로 보내는 Windows용 도구입니다.
 
