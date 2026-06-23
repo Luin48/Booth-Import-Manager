@@ -1,0 +1,34 @@
+{
+  "download_folder": "C:\\Users\\YOUR_NAME\\Downloads",
+  "intake_folder": "D:\\BoothAssets",
+  "unity_queue_folder": "D:\\BoothAssets\\_queue",
+  "port": 7831,
+  "tags": [
+    {
+      "id": "default-untagged",
+      "name": "태그 없음",
+      "color": "#475569"
+    },
+    {
+      "id": "default-hair",
+      "name": "01.헤어",
+      "color": "#2563eb"
+    },
+    {
+      "id": "default-clothes",
+      "name": "02.옷",
+      "color": "#059669"
+    },
+    {
+      "id": "default-gimmick",
+      "name": "03.기믹",
+      "color": "#db2777"
+    },
+    {
+      "id": "default-texture",
+      "name": "04.텍스쳐",
+      "color": "#64748b"
+    }
+  ],
+  "delete_local_after_queue": false
+}

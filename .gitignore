@@ -1,0 +1,28 @@
+# Local runtime state
+config.json
+asset_state.json
+tag_state.json
+downloads/
+dist/
+build/
+release/
+_local_archive/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+
+# PyInstaller
+*.spec
+*.exe
+*.unitypackage
+
+# Logs and OS noise
+*.log
+Thumbs.db
+.DS_Store
+
+# Local classifier experiments, not part of this app
+asset_classifier/

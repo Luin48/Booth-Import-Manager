@@ -1,0 +1,14 @@
+{
+  "manifest_version": 3,
+  "name": "Booth Import Manager Bridge",
+  "version": "0.1.0",
+  "description": "Reports completed booth.pm downloads to the local Booth Import Manager.",
+  "permissions": ["downloads"],
+  "host_permissions": ["http://127.0.0.1:7831/*", "https://booth.pm/*", "https://*.booth.pm/*"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Booth Import Manager"
+  }
+}

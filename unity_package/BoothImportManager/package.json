@@ -1,0 +1,7 @@
+{
+  "name": "local.booth-import-manager",
+  "version": "0.1.0",
+  "displayName": "Booth Import Manager",
+  "description": "Imports queued Booth unitypackages and organizes assets by tag.",
+  "unity": "2022.3"
+}

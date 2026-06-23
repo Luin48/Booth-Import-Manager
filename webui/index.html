@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Booth Import Manager</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body data-theme="dark">
+    <main class="app-shell">
+      <header class="topbar">
+        <div>
+          <h1>Booth Import Manager</h1>
+          <p>Booth 다운로드 파일을 Unity 임포트 큐로 정리</p>
+        </div>
+        <div class="topbar-actions">
+          <button id="themeToggleBtn" class="theme-toggle" title="다크모드/라이트모드 전환" aria-pressed="true">
+            <span class="theme-toggle-track">
+              <span class="theme-toggle-thumb"></span>
+            </span>
+            <span id="themeToggleText">다크</span>
+          </button>
+          <button id="refreshBtn" class="icon-btn" title="새로고침">↻</button>
+          <button id="saveConfigBtn" class="primary-btn">설정 저장</button>
+        </div>
+      </header>
+
+      <section class="layout">
+        <aside class="side-panel">
+          <h2>폴더</h2>
+          <label>
+            Chrome 다운로드 폴더
+            <input id="downloadFolderInput" type="text" spellcheck="false" />
+          </label>
+          <label>
+            이동 후 보관 폴더
+            <input id="intakeFolderInput" type="text" spellcheck="false" />
+          </label>
+          <label>
+            Unity 큐 폴더
+            <input id="queueFolderInput" type="text" spellcheck="false" />
+          </label>
+          <label class="check-row">
+            <input id="deleteAfterQueueInput" type="checkbox" />
+            큐에 넣은 뒤 로컬 파일 삭제
+          </label>
+
+          <div class="hint">
+            Unity 설정의 WatchFolder에는 이동 후 보관 폴더를 넣으면 됩니다.
+          </div>
+        </aside>
+
+        <section class="work-area">
+          <div class="toolbar">
+            <div class="segmented" role="tablist">
+              <button class="active" data-filter="all">전체</button>
+              <button data-filter="untagged">미지정</button>
+              <button data-filter="tagged">태그 있음</button>
+            </div>
+            <div class="toolbar-spacer"></div>
+            <select id="bulkTagSelect" aria-label="선택 파일 태그"></select>
+            <button id="applyTagBtn" class="secondary-btn" title="선택한 파일들에 오른쪽 드롭다운의 태그를 한 번에 지정합니다.">태그 적용</button>
+            <button id="queueBtn" class="primary-btn">Unity 큐로 보내기</button>
+            <button id="hideBtn" class="secondary-btn">목록 지우기</button>
+            <button id="deleteBtn" class="danger-btn">로컬 삭제</button>
+          </div>
+
+          <div class="table-wrap">
+            <table>
+              <colgroup>
+                <col class="select-col" />
+                <col />
+                <col class="type-col" />
+                <col class="size-col" />
+                <col class="status-col" />
+                <col class="tag-col" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th><input id="selectAllInput" type="checkbox" /></th>
+                  <th>파일</th>
+                  <th>형식</th>
+                  <th>크기</th>
+                  <th>상태</th>
+                  <th>태그</th>
+                </tr>
+              </thead>
+              <tbody id="assetRows"></tbody>
+            </table>
+            <div id="emptyState" class="empty-state">표시할 파일 없음</div>
+          </div>
+        </section>
+
+        <aside class="tag-panel">
+          <h2>태그</h2>
+          <div class="preset-row" id="presetColors"></div>
+          <div id="tagList" class="tag-list"></div>
+          <div class="tag-editor">
+            <input id="newTagNameInput" type="text" placeholder="새 태그" />
+            <input id="newTagColorInput" type="color" value="#2563eb" />
+            <button id="addTagBtn" class="secondary-btn">추가</button>
+          </div>
+        </aside>
+      </section>
+
+      <footer class="statusbar">
+        <span id="statusText">준비됨</span>
+      </footer>
+    </main>
+    <script src="/app.js"></script>
+  </body>
+</html>
