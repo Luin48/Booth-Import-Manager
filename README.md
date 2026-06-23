@@ -1,4 +1,4 @@
-﻿# Booth Import Manager
+# Booth Import Manager
 
 Booth에서 받은 Unity 에셋 파일을 지정 폴더로 옮기고, 태그별 Unity 임포트 큐로 보내는 Windows용 도구입니다.
 
@@ -127,16 +127,3 @@ python -m pip install pyinstaller pillow
 ```text
 dist/BoothImportManager.exe
 ```
-
-## 배포 전 주의
-
-다음 파일/폴더는 개인 환경 값이나 빌드 산출물이므로 Git에 올리지 않습니다.
-
-- `config.json`
-- `asset_state.json`
-- `tag_state.json`
-- `downloads/`
-- `build/`
-- `dist/`
-- `release/`
-- `*.exe`
