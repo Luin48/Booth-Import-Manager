@@ -124,9 +124,24 @@ namespace BoothImportManager
                     roots.Add(assetPath);
             }
 
+            if (AssetDatabase.IsValidFolder(targetRoot))
+            {
+                foreach (var directory in Directory.GetDirectories(ToAbsPath(targetRoot)))
+                {
+                    var folderName = Path.GetFileName(directory);
+                    var normalized = NormalizeUnityDuplicateName(folderName);
+                    var assetPath = $"{targetRoot}/{folderName}";
+                    if (!expectedNames.Contains(normalized)) continue;
+                    if (folderName == normalized) continue;
+                    if (AssetDatabase.IsValidFolder(assetPath))
+                        roots.Add(assetPath);
+                }
+            }
+
             return roots
                 .Distinct()
                 .OrderBy(path => NormalizeUnityDuplicateName(Path.GetFileName(path)))
+                .ThenByDescending(path => Path.GetFileName(path) != NormalizeUnityDuplicateName(Path.GetFileName(path)))
                 .ThenBy(path => path)
                 .ToList();
         }
