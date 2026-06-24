@@ -76,6 +76,12 @@ Tools > Booth Import Manager > Settings
 
 앱에서 설정한 `Unity 큐 폴더`와 Unity의 큐 감시 경로가 같은 위치를 바라봐야 합니다.
 
+## 권장사항
+
+이미 Unity 프로젝트에 임포트되어 있는 에셋 폴더를 다시 분류하거나 정리할 때는 별도 도구인 [Unity Asset Classifier](https://github.com/Luin48/Unity-Asset-Classifier)를 사용하는 것을 권장합니다.
+
+Booth Import Manager는 Booth 다운로드 파일을 Unity 임포트 큐로 보내는 용도에 집중하고, 기존 `Assets` 폴더 정리는 Unity Asset Classifier에서 처리하는 방식이 더 안전합니다.
+
 ## 사용법
 
 1. Booth 페이지에서 파일 다운로드
