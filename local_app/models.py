@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 
-SUPPORTED_SUFFIXES = {".zip", ".unitypackage"}
+SUPPORTED_SUFFIXES = {".unitypackage", ".zip", ".7z", ".rar"}
 
 
 @dataclass
@@ -17,12 +17,13 @@ class LocalAsset:
     tag: str = ""
 
     @classmethod
-    def from_path(cls, path: Path, tag: str = "") -> "LocalAsset":
+    def from_path(cls, path: Path, tag: str = "", asset_id: str | None = None) -> "LocalAsset":
         suffix = path.suffix.lower()
-        file_type = "unitypackage" if suffix == ".unitypackage" else "zip" if suffix == ".zip" else "other"
+        file_type = "unitypackage" if suffix == ".unitypackage" else suffix.lstrip(".") if suffix in SUPPORTED_SUFFIXES else "other"
+        display_name = asset_id or path.name
         return cls(
-            id=path.name,
-            filename=path.name,
+            id=display_name,
+            filename=display_name,
             path=str(path),
             size=path.stat().st_size,
             file_type=file_type,

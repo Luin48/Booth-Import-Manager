@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import shutil
 import uuid
 import atexit
 import threading
@@ -15,6 +16,57 @@ from file_mover import move_completed_booth_file, scan_intake_files
 from models import LocalAsset
 from queue_manager import queue_for_unity
 from tag_state import load_tag_state, remove_asset_tag, set_asset_tag
+
+
+def _is_within(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
+
+
+def _delete_local_artifacts(filename: str, record: dict) -> int:
+    cfg = get_config()
+    intake = Path(cfg.intake_folder)
+    source = intake / filename
+    deleted = 0
+
+    if source.exists():
+        source.unlink()
+        deleted += 1
+
+    candidates: list[Path] = []
+    for raw_path in record.get("extracted_paths", []):
+        if raw_path:
+            candidates.append(Path(raw_path))
+
+    if source.suffix.lower() != ".unitypackage":
+        stem_dir = source.with_suffix("")
+        candidates.append(stem_dir)
+        if intake.exists():
+            candidates.extend(
+                path
+                for path in intake.iterdir()
+                if path.is_dir()
+                and path.name.startswith(f"{stem_dir.name}_")
+                and path.name[len(stem_dir.name) + 1 :].isdigit()
+            )
+
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
+        if not candidate.exists() or not candidate.is_dir():
+            continue
+        if resolved == intake.resolve() or not _is_within(candidate, intake):
+            continue
+        shutil.rmtree(candidate)
+        deleted += 1
+
+    return deleted
 
 
 def _asset_payload() -> list[dict]:
@@ -106,13 +158,12 @@ class AppHandler(BaseHTTPRequestHandler):
     def do_DELETE(self) -> None:
         path = self._path()
         if path.startswith("/api/assets/"):
-            cfg = get_config()
             filename = Path(unquote(path.removeprefix("/api/assets/"))).name
-            target = Path(cfg.intake_folder) / filename
-            target.unlink(missing_ok=True)
+            record = refresh_import_status().get(filename, {})
+            deleted = _delete_local_artifacts(filename, record)
             remove_asset_tag(filename)
             remove_record(filename)
-            self._json({"status": "deleted"})
+            self._json({"status": "deleted", "deleted": deleted})
         else:
             self._json({"error": "not found"}, 404)
 
@@ -159,9 +210,9 @@ class AppHandler(BaseHTTPRequestHandler):
                 results.append(queue_for_unity(filename, tag, delete_local))
                 result = results[-1]
                 if result.get("status") == "no_package":
-                    mark_no_package(filename)
+                    mark_no_package(filename, result.get("extracted", []))
                 else:
-                    mark_queued(filename, result.get("queued", []))
+                    mark_queued(filename, result.get("queued", []), result.get("extracted", []))
                 if delete_local:
                     remove_asset_tag(filename)
             except Exception as exc:

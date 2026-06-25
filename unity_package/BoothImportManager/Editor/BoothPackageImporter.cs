@@ -52,26 +52,58 @@ namespace BoothImportManager
             File.WriteAllText(PendingFile, JsonUtility.ToJson(state), Encoding.UTF8);
 
             var packageName = Path.GetFileNameWithoutExtension(packagePath);
+            var finished = false;
             AssetDatabase.importPackageCompleted += OnCompleted;
             AssetDatabase.importPackageFailed += OnFailed;
+            ScheduleFallback();
             AssetDatabase.ImportPackage(packagePath, false);
 
             void OnCompleted(string name)
             {
                 if (name != packageName) return;
-                AssetDatabase.importPackageCompleted -= OnCompleted;
-                AssetDatabase.importPackageFailed -= OnFailed;
-                AfterImport(state);
+                Complete();
             }
 
             void OnFailed(string name, string error)
             {
                 if (name != packageName) return;
+                finished = true;
                 AssetDatabase.importPackageCompleted -= OnCompleted;
                 AssetDatabase.importPackageFailed -= OnFailed;
                 Debug.LogError($"[BoothImportManager] Import failed: {name} - {error}");
                 Cleanup();
                 BoothQueueWatcher.ImportFinished();
+            }
+
+            void Complete()
+            {
+                if (finished) return;
+                finished = true;
+                AssetDatabase.importPackageCompleted -= OnCompleted;
+                AssetDatabase.importPackageFailed -= OnFailed;
+                AfterImport(state);
+            }
+
+            void ScheduleFallback()
+            {
+                var frames = 0;
+                EditorApplication.update += WaitForImport;
+
+                void WaitForImport()
+                {
+                    if (finished)
+                    {
+                        EditorApplication.update -= WaitForImport;
+                        return;
+                    }
+
+                    if (++frames < 20) return;
+                    EditorApplication.update -= WaitForImport;
+                    if (!File.Exists(PendingFile)) return;
+
+                    Debug.LogWarning($"[BoothImportManager] Import completion fallback: {Path.GetFileName(packagePath)}");
+                    Complete();
+                }
             }
         }
 
@@ -80,9 +112,10 @@ namespace BoothImportManager
             if (!File.Exists(PendingFile)) return;
             Cleanup();
 
+            var assetRoot = NormalizeAssetPath(BoothImportSettings.instance.AssetRootFolder);
             var targetRoot = state.tag == UntaggedTagName
-                ? BoothImportSettings.instance.AssetRootFolder
-                : $"{BoothImportSettings.instance.AssetRootFolder}/{SanitizeFolderName(state.tag)}";
+                ? assetRoot
+                : $"{assetRoot}/{SanitizeFolderName(state.tag)}";
             EnsureFolder(targetRoot);
             AssetDatabase.Refresh();
 
@@ -93,6 +126,18 @@ namespace BoothImportManager
             {
                 foreach (var source in importedRoots)
                     MergeIntoTarget(source, $"{targetRoot}/{NormalizeUnityDuplicateName(Path.GetFileName(source))}");
+                MergeDuplicateFoldersInTarget(targetRoot);
+            }
+            finally
+            {
+                AssetDatabase.StopAssetEditing();
+            }
+
+            AssetDatabase.Refresh();
+            AssetDatabase.StartAssetEditing();
+            try
+            {
+                MergeDuplicateFoldersInTarget(targetRoot);
             }
             finally
             {
@@ -103,14 +148,15 @@ namespace BoothImportManager
             catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Queue file delete failed: {e.Message}"); }
 
             AssetDatabase.Refresh();
+            ScheduleDelayedDuplicateMerge(assetRoot);
             BoothQueueWatcher.ImportFinished();
         }
 
         private static List<string> FindImportedRootFolders(PendingState state, string targetRoot)
         {
-            var expectedNames = (state.expectedFolders ?? Array.Empty<string>())
+            var expectedNames = new HashSet<string>((state.expectedFolders ?? Array.Empty<string>())
                 .Select(NormalizeUnityDuplicateName)
-                .ToList();
+                .Where(name => !string.IsNullOrEmpty(name)));
             var roots = new List<string>();
 
             foreach (var directory in Directory.GetDirectories(Application.dataPath))
@@ -130,9 +176,9 @@ namespace BoothImportManager
                 {
                     var folderName = Path.GetFileName(directory);
                     var normalized = NormalizeUnityDuplicateName(folderName);
-                    var assetPath = $"{targetRoot}/{folderName}";
+                    var assetPath = ToAssetPath(directory);
                     if (!expectedNames.Contains(normalized)) continue;
-                    if (folderName == normalized) continue;
+                    if (!IsUnityDuplicateName(folderName)) continue;
                     if (AssetDatabase.IsValidFolder(assetPath))
                         roots.Add(assetPath);
                 }
@@ -144,6 +190,62 @@ namespace BoothImportManager
                 .ThenByDescending(path => Path.GetFileName(path) != NormalizeUnityDuplicateName(Path.GetFileName(path)))
                 .ThenBy(path => path)
                 .ToList();
+        }
+
+        private static void MergeDuplicateFoldersInTarget(string targetRoot)
+        {
+            if (!AssetDatabase.IsValidFolder(targetRoot)) return;
+
+            var changed = true;
+            while (changed)
+            {
+                changed = false;
+                var duplicates = Directory.GetDirectories(ToAbsPath(targetRoot), "*", SearchOption.AllDirectories)
+                    .Select(ToAssetPath)
+                    .Where(AssetDatabase.IsValidFolder)
+                    .Where(path => IsUnityDuplicateName(Path.GetFileName(path)))
+                    .OrderBy(path => path.Count(ch => ch == '/'))
+                    .ToList();
+
+                foreach (var source in duplicates)
+                {
+                    if (!AssetDatabase.IsValidFolder(source)) continue;
+                    var folderName = Path.GetFileName(source);
+                    var normalized = NormalizeUnityDuplicateName(folderName);
+
+                    var target = $"{ParentPath(source)}/{normalized}";
+                    if (source == target || !AssetDatabase.IsValidFolder(target)) continue;
+
+                    Debug.Log($"[BoothImportManager] Merge duplicate folder: {source} -> {target}");
+                    MergeIntoTarget(source, target);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+
+        private static void ScheduleDelayedDuplicateMerge(string root)
+        {
+            var frames = 0;
+            EditorApplication.update += WaitAndMerge;
+
+            void WaitAndMerge()
+            {
+                if (++frames < 10) return;
+                EditorApplication.update -= WaitAndMerge;
+
+                AssetDatabase.Refresh();
+                AssetDatabase.StartAssetEditing();
+                try
+                {
+                    MergeDuplicateFoldersInTarget(root);
+                }
+                finally
+                {
+                    AssetDatabase.StopAssetEditing();
+                }
+                AssetDatabase.Refresh();
+            }
         }
 
         private static void MergeIntoTarget(string source, string target)
@@ -184,7 +286,7 @@ namespace BoothImportManager
 
         private static List<string> ReadTopLevelFoldersFromPackage(string packagePath)
         {
-            var topFolders = new HashSet<string>();
+            var folderNames = new HashSet<string>();
             try
             {
                 using var fs = File.OpenRead(packagePath);
@@ -207,8 +309,11 @@ namespace BoothImportManager
                         if (assetPath.StartsWith("Assets/"))
                         {
                             var parts = assetPath.Substring("Assets/".Length).Split('/');
-                            if (parts.Length > 0 && !string.IsNullOrEmpty(parts[0]))
-                                topFolders.Add(parts[0]);
+                            foreach (var part in parts)
+                            {
+                                if (!string.IsNullOrEmpty(part))
+                                    folderNames.Add(part);
+                            }
                         }
                         SkipPadding(gz, size);
                     }
@@ -222,7 +327,7 @@ namespace BoothImportManager
             {
                 Debug.LogWarning($"[BoothImportManager] Package scan failed: {e.Message}");
             }
-            return topFolders.ToList();
+            return folderNames.ToList();
         }
 
         private static bool ReadFully(Stream stream, byte[] buffer, int count)
@@ -259,6 +364,7 @@ namespace BoothImportManager
 
         private static void EnsureFolder(string path)
         {
+            path = NormalizeAssetPath(path);
             var parts = path.Split('/');
             var current = parts[0];
             for (var i = 1; i < parts.Length; i++)
@@ -273,7 +379,20 @@ namespace BoothImportManager
         private static string ParentPath(string path) => path.Substring(0, path.LastIndexOf('/'));
 
         private static string ToAbsPath(string assetPath)
-            => Path.Combine(Application.dataPath, assetPath.Substring("Assets/".Length).Replace('/', Path.DirectorySeparatorChar));
+        {
+            assetPath = NormalizeAssetPath(assetPath);
+            if (assetPath == "Assets") return Application.dataPath;
+            return Path.Combine(Application.dataPath, assetPath.Substring("Assets/".Length).Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        private static string NormalizeAssetPath(string path)
+        {
+            path = (path ?? "Assets").Replace('\\', '/').Trim();
+            while (path.Contains("//"))
+                path = path.Replace("//", "/");
+            path = path.TrimEnd('/');
+            return string.IsNullOrEmpty(path) ? "Assets" : path;
+        }
 
         private static string ToAssetPath(string absPath)
         {
@@ -294,6 +413,11 @@ namespace BoothImportManager
         private static string NormalizeUnityDuplicateName(string name)
         {
             return System.Text.RegularExpressions.Regex.Replace(name, @"_\d{1,3}$", "");
+        }
+
+        private static bool IsUnityDuplicateName(string name)
+        {
+            return !string.Equals(name, NormalizeUnityDuplicateName(name), StringComparison.Ordinal);
         }
 
         private static void Cleanup()

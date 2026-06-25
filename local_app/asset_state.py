@@ -54,23 +54,25 @@ def get_record(filename: str) -> dict:
     return refresh_import_status().get(filename, {})
 
 
-def mark_queued(filename: str, queued_paths: list[str]) -> None:
+def mark_queued(filename: str, queued_paths: list[str], extracted_paths: list[str] | None = None) -> None:
     state = load_asset_state()
     state[filename] = {
         **state.get(filename, {}),
         "status": "queued",
         "queued_paths": queued_paths,
+        "extracted_paths": extracted_paths or [],
         "hidden": False,
     }
     save_asset_state(state)
 
 
-def mark_no_package(filename: str) -> None:
+def mark_no_package(filename: str, extracted_paths: list[str] | None = None) -> None:
     state = load_asset_state()
     state[filename] = {
         **state.get(filename, {}),
         "status": "no_package",
         "queued_paths": [],
+        "extracted_paths": extracted_paths or [],
         "hidden": False,
     }
     save_asset_state(state)

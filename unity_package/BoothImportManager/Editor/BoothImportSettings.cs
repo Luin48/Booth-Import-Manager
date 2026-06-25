@@ -7,7 +7,7 @@ namespace BoothImportManager
     public class BoothImportSettings : ScriptableSingleton<BoothImportSettings>
     {
         public string WatchFolder = "";
-        public string AssetRootFolder = "Assets/BoothAssets";
+        public string AssetRootFolder = "Assets";
         public bool AutoImport = true;
 
         public string QueueFolder => string.IsNullOrEmpty(WatchFolder)

@@ -24,12 +24,12 @@ def _copy_package(package: Path, tag: str) -> Path:
     return target
 
 
-def _packages_from_zip(path: Path) -> list[Path]:
+def _packages_from_zip(path: Path) -> tuple[list[Path], Path]:
     extract_dir = unique_path(path.with_suffix(""))
     extract_dir.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(path, "r") as archive:
         archive.extractall(extract_dir)
-    return list(extract_dir.rglob("*.unitypackage"))
+    return list(extract_dir.rglob("*.unitypackage")), extract_dir
 
 
 def queue_for_unity(filename: str, tag: str, delete_local: bool = False) -> dict:
@@ -39,26 +39,24 @@ def queue_for_unity(filename: str, tag: str, delete_local: bool = False) -> dict
         raise FileNotFoundError(f"Local file not found: {source}")
 
     queued: list[Path] = []
+    extracted: list[Path] = []
     if source.suffix.lower() == ".unitypackage":
         queued.append(_copy_package(source, tag))
     elif source.suffix.lower() == ".zip":
-        packages = _packages_from_zip(source)
+        packages, extract_dir = _packages_from_zip(source)
+        extracted.append(extract_dir)
         for package in packages:
             queued.append(_copy_package(package, tag))
-        if not packages:
-            return {
-                "filename": source.name,
-                "tag": tag,
-                "queued": [],
-                "status": "no_package",
-            }
 
     if delete_local or cfg.delete_local_after_queue:
         source.unlink(missing_ok=True)
+        for path in extracted:
+            shutil.rmtree(path, ignore_errors=True)
 
     return {
         "filename": source.name,
         "tag": tag,
         "queued": [str(path) for path in queued],
-        "status": "queued",
+        "extracted": [str(path) for path in extracted],
+        "status": "queued" if queued else "no_package",
     }
