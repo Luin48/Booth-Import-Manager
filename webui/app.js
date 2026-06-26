@@ -3,6 +3,7 @@ const state = {
   assets: [],
   selected: new Set(),
   filter: "all",
+  logs: [],
 };
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +36,26 @@ function initTheme() {
 
 function setStatus(text) {
   $("statusText").textContent = text;
+  state.logs.push({
+    time: new Date().toLocaleTimeString("ko-KR", { hour12: false }),
+    text,
+  });
+  if (state.logs.length > 200) state.logs.shift();
+  renderStatusLog();
+}
+
+function renderStatusLog() {
+  const list = $("statusLogList");
+  if (!list) return;
+  list.innerHTML = state.logs
+    .slice()
+    .reverse()
+    .map((entry) => `
+      <div class="status-log-line">
+        <span class="status-log-time">${escapeHtml(entry.time)}</span>${escapeHtml(entry.text)}
+      </div>
+    `)
+    .join("");
 }
 
 function formatBytes(bytes) {
@@ -326,6 +347,10 @@ $("applyTagBtn").addEventListener("click", async () => {
     await patchTag(filename, tag);
   }
   setStatus(`${state.selected.size}개 태그 적용`);
+});
+
+$("statusbar").addEventListener("click", () => {
+  $("statusbar").classList.toggle("expanded");
 });
 
 window.addEventListener("pagehide", () => {

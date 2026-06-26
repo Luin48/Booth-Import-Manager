@@ -463,13 +463,61 @@ th input[type="checkbox"] {
 
 .statusbar {
   height: 32px;
-  display: flex;
-  align-items: center;
+  display: grid;
+  grid-template-rows: 31px 1fr;
+  align-items: stretch;
   padding: 0 16px;
   border-top: 1px solid var(--line);
   background: var(--panel);
   color: var(--muted);
   font-size: 12px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: height 140ms ease;
+}
+
+.statusbar.expanded {
+  height: 180px;
+}
+
+.status-current {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-bottom: 1px solid transparent;
+}
+
+.statusbar.expanded .status-current {
+  border-bottom-color: var(--line);
+}
+
+#statusText {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.status-log-list {
+  display: none;
+  min-height: 0;
+  overflow: auto;
+  padding: 8px 0;
+  white-space: pre-wrap;
+  line-height: 1.45;
+}
+
+.statusbar.expanded .status-log-list {
+  display: block;
+}
+
+.status-log-line {
+  padding: 2px 0;
+  color: var(--muted);
+}
+
+.status-log-time {
+  color: var(--accent);
+  margin-right: 8px;
 }
 
 @media (max-width: 980px) {

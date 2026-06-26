@@ -103,8 +103,11 @@
         </aside>
       </section>
 
-      <footer class="statusbar">
-        <span id="statusText">준비됨</span>
+      <footer id="statusbar" class="statusbar" title="로그 열기/접기">
+        <div class="status-current">
+          <span id="statusText">준비됨</span>
+        </div>
+        <div id="statusLogList" class="status-log-list"></div>
       </footer>
     </main>
     <script src="/app.js"></script>

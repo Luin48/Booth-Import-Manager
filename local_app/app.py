@@ -4,7 +4,6 @@ import json
 import mimetypes
 import shutil
 import uuid
-import atexit
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -75,8 +74,6 @@ def _asset_payload() -> list[dict]:
     payload = []
     for path in scan_intake_files():
         record = asset_state.get(path.name, {})
-        if record.get("hidden"):
-            continue
         item = LocalAsset.from_path(path, tag_state.get(path.name, "")).__dict__
         item["status"] = record.get("status", "pending")
         payload.append(item)
@@ -279,8 +276,6 @@ def main() -> None:
     Path(cfg.download_folder).mkdir(parents=True, exist_ok=True)
     Path(cfg.intake_folder).mkdir(parents=True, exist_ok=True)
     Path(cfg.queue_folder).mkdir(parents=True, exist_ok=True)
-    cleanup_final_records_on_start()
-    atexit.register(cleanup_final_records_on_start)
     server = ThreadingHTTPServer(("127.0.0.1", cfg.port), AppHandler)
     print(f"Booth Import Manager: http://127.0.0.1:{cfg.port}")
     server.serve_forever()
