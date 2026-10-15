@@ -113,6 +113,7 @@ function renderConfig() {
   $("intakeFolderInput").value = cfg.intakeFolder;
   $("queueFolderInput").value = cfg.queueFolder;
   $("deleteAfterQueueInput").checked = cfg.deleteLocalAfterQueue;
+  $("stayRunningInput").checked = cfg.stayRunning !== false;
 
   $("bulkTagSelect").innerHTML = tagOptionsHtml();
 
@@ -170,6 +171,7 @@ async function saveConfig() {
     intakeFolder: $("intakeFolderInput").value.trim(),
     queueFolder: $("queueFolderInput").value.trim(),
     deleteLocalAfterQueue: $("deleteAfterQueueInput").checked,
+    stayRunning: $("stayRunningInput").checked,
   };
   await api("/api/config", { method: "POST", body: JSON.stringify(payload) });
   setStatus("설정 저장됨");
@@ -333,6 +335,10 @@ document.querySelectorAll(".segmented button").forEach((button) => {
 });
 
 $("refreshBtn").addEventListener("click", loadAll);
+$("quitBtn").addEventListener("click", async () => {
+  await api("/api/shutdown", { method: "POST", body: JSON.stringify({ reason: "user" }) }).catch(() => {});
+  setStatus("앱 종료됨 — 이 탭을 닫아도 됩니다");
+});
 $("themeToggleBtn").addEventListener("click", () => {
   applyTheme(document.body.dataset.theme === "dark" ? "light" : "dark");
 });
@@ -354,11 +360,11 @@ $("statusbar").addEventListener("click", () => {
 });
 
 window.addEventListener("pagehide", () => {
-  const payload = new Blob(["{}"], { type: "application/json" });
+  const payload = new Blob([JSON.stringify({ reason: "pagehide" })], { type: "text/plain" });
   if (navigator.sendBeacon) {
     navigator.sendBeacon("/api/shutdown", payload);
   } else {
-    fetch("/api/shutdown", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" }, keepalive: true }).catch(() => {});
+    fetch("/api/shutdown", { method: "POST", body: JSON.stringify({ reason: "pagehide" }), headers: { "Content-Type": "application/json" }, keepalive: true }).catch(() => {});
   }
 });
 

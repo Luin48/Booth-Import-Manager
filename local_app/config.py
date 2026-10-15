@@ -39,14 +39,29 @@ class AppConfig:
         Tag(id=str(uuid.uuid4()), name="기타", color="#64748b"),
     ])
     delete_local_after_queue: bool = False
+    # v0.3: 브라우저 탭을 닫아도 서버 유지 (크롬 확장 사이드패널이 GUI 역할)
+    stay_running: bool = True
+    # v0.3: 받자마자 큐로 보낼지 (확장의 'Unity로' 버튼)
+    auto_queue: bool = True
+    # v0.3: ALCOM/VCC 프로젝트가 모여 있는 폴더들 + 개별로 추가한 프로젝트 경로
+    project_roots: list[str] = field(default_factory=list)
+    extra_projects: list[str] = field(default_factory=list)
+    # v0.3: 프로젝트별 설정 { projectKey: {"tags": [tagId...], "assetRoot": "Assets/...", "hidden": bool, "alias": str} }
+    projects: dict = field(default_factory=dict)
 
     @property
     def queue_folder(self) -> str:
         return self.unity_queue_folder or str(Path(self.intake_folder) / "_queue")
 
+    @property
+    def projects_queue_root(self) -> str:
+        # 프로젝트별 큐. 구버전 유니티 패키지가 _queue 를 하위폴더까지 감시하므로 그 밖에 둔다.
+        return str(Path(self.intake_folder) / "_projects")
+
     def save(self) -> None:
         ensure_special_tags(self)
         CONFIG_PATH.write_text(json.dumps(asdict(self), ensure_ascii=False, indent=2), encoding="utf-8")
+        write_bridge(self)
 
     @classmethod
     def load(cls) -> "AppConfig":
@@ -57,7 +72,8 @@ class AppConfig:
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             data["tags"] = [Tag(**tag) for tag in data.get("tags", [])]
-            cfg = cls(**data)
+            known = set(cls.__dataclass_fields__)
+            cfg = cls(**{k: v for k, v in data.items() if k in known})
             ensure_special_tags(cfg)
             Path(cfg.download_folder).mkdir(parents=True, exist_ok=True)
             Path(cfg.intake_folder).mkdir(parents=True, exist_ok=True)
@@ -67,6 +83,25 @@ class AppConfig:
             cfg = cls()
             cfg.save()
             return cfg
+
+
+def write_bridge(cfg: AppConfig) -> None:
+    """유니티 패키지가 설정 없이도 보관 폴더를 찾을 수 있게 고정 위치에 남긴다."""
+    import os
+    base = os.environ.get("LOCALAPPDATA")
+    if not base:
+        return
+    try:
+        target = Path(base) / "BoothImportManager"
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "bridge.json").write_text(json.dumps({
+            "intakeFolder": cfg.intake_folder,
+            "projectsQueueRoot": cfg.projects_queue_root,
+            "legacyQueueFolder": cfg.queue_folder,
+            "port": cfg.port,
+        }, ensure_ascii=False, indent=2), encoding="utf-8")
+    except OSError:
+        pass
 
 
 def ensure_special_tags(cfg: AppConfig) -> None:

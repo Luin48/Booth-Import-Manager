@@ -1,0 +1,76 @@
+body { min-width: 300px; }
+.sp-head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line);
+}
+.conn { display: inline-flex; align-items: center; gap: 5px; color: var(--muted); font-size: 12px; }
+.offline, .target { margin: 10px; padding: 10px; }
+.offline p { margin: 6px 0 10px; }
+.target { display: grid; gap: 6px; }
+.step { display: flex; align-items: center; gap: 8px; }
+.num {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+  flex: none;
+}
+.small-text { font-size: 12px; padding-left: 28px; }
+.tabs { padding: 0 10px; }
+.tab { padding: 10px; }
+.filter-row { justify-content: space-between; margin-bottom: 8px; }
+.list { display: grid; gap: 6px; }
+
+.file {
+  display: grid;
+  grid-template-columns: auto 44px 1fr;
+  gap: 8px;
+  align-items: start;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  cursor: pointer;
+}
+.file.selected { border-color: var(--accent-strong); }
+.file img, .file .noimg { width: 44px; height: 44px; border-radius: 4px; object-fit: cover; background: var(--panel-2); }
+.file .title { font-weight: 600; }
+.file .sub { color: var(--muted); font-size: 12px; word-break: break-all; }
+.file .chips { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+
+.actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  gap: 6px;
+  margin: 10px -10px -10px;
+  padding: 10px;
+  background: var(--bg);
+  border-top: 1px solid var(--line);
+}
+
+.qproject { padding: 10px; }
+.qproject h3 { display: flex; align-items: center; gap: 6px; margin: 0 0 6px; font-size: 13px; }
+.qfile { display: flex; align-items: center; gap: 6px; padding: 4px 0; border-top: 1px solid var(--line-soft); }
+
+.wish-rules { display: grid; gap: 8px; padding: 10px; margin-bottom: 8px; }
+.wish-rule { display: grid; grid-template-columns: 110px 1fr; gap: 6px; align-items: center; }
+.wish-rule .wish-name { grid-column: 2; }
+.wish-rule .chip { justify-self: start; }
+.wish-buttons { margin-bottom: 8px; }
+#wishSummary { margin-bottom: 8px; }
+.wish-item { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--panel); }
+.wish-item img { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
+.confirm-box { padding: 10px; margin-bottom: 8px; border: 1px solid var(--danger); border-radius: 8px; background: var(--danger-bg); }

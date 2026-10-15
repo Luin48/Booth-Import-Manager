@@ -72,6 +72,14 @@ namespace BoothImportManager
                 AssetDatabase.importPackageFailed -= OnFailed;
                 Debug.LogError($"[BoothImportManager] Import failed: {name} - {error}");
                 Cleanup();
+                // 실패한 파일은 .failed 로 이름을 바꿔 재시도 반복을 막는다 (로컬 앱이 '실패'로 표시)
+                try
+                {
+                    var failed = packagePath + ".failed";
+                    if (File.Exists(failed)) File.Delete(failed);
+                    if (File.Exists(packagePath)) File.Move(packagePath, failed);
+                }
+                catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Could not mark failed: {e.Message}"); }
                 BoothQueueWatcher.ImportFinished();
             }
 
@@ -112,7 +120,7 @@ namespace BoothImportManager
             if (!File.Exists(PendingFile)) return;
             Cleanup();
 
-            var assetRoot = NormalizeAssetPath(BoothImportSettings.instance.AssetRootFolder);
+            var assetRoot = NormalizeAssetPath(BoothImportSettings.instance.ResolveAssetRoot(state.packagePath));
             var targetRoot = state.tag == UntaggedTagName
                 ? assetRoot
                 : $"{assetRoot}/{SanitizeFolderName(state.tag)}";

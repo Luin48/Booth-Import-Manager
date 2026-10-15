@@ -5,11 +5,12 @@ import threading
 import time
 import webbrowser
 import atexit
+import sys
 from pathlib import Path
 
 from app import AppHandler, ThreadingHTTPServer
 from asset_state import cleanup_final_records_on_start
-from config import get_config
+from config import get_config, write_bridge
 
 
 def _port_open(port: int) -> bool:
@@ -24,6 +25,7 @@ def main() -> None:
     Path(cfg.intake_folder).mkdir(parents=True, exist_ok=True)
     Path(cfg.queue_folder).mkdir(parents=True, exist_ok=True)
     cleanup_final_records_on_start()
+    write_bridge(cfg)
     atexit.register(cleanup_final_records_on_start)
     url = f"http://127.0.0.1:{cfg.port}/"
 
@@ -36,7 +38,9 @@ def main() -> None:
         server = None
         thread = None
 
-    webbrowser.open(url)
+    # --background: 윈도우 시작프로그램용. 브라우저를 열지 않고 서버만 상주.
+    if "--background" not in sys.argv:
+        webbrowser.open(url)
 
     try:
         if thread is None:

@@ -93,3 +93,10 @@ def remove_record(filename: str) -> None:
     if filename in state:
         del state[filename]
         save_asset_state(state)
+
+
+def reset_record(filename: str) -> None:
+    """새로 받은 파일: 같은 이름의 옛 기록(숨김/완료)이 남아 있어도 새 항목으로 시작."""
+    state = load_asset_state()
+    state[filename] = {"status": "pending", "hidden": False}
+    save_asset_state(state)

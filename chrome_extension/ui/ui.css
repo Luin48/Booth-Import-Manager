@@ -1,0 +1,128 @@
+/* 확장 페이지(사이드패널/관리) 공통 — 로컬 앱 웹 GUI와 같은 유니티풍 팔레트 */
+:root {
+  color-scheme: dark;
+  --bg: #2f2f2f;
+  --panel: #383838;
+  --panel-2: #424242;
+  --field: #2b2b2b;
+  --line: #242424;
+  --line-soft: #4a4a4a;
+  --text: #d4d4d4;
+  --muted: #a7a7a7;
+  --accent: #66c9f4;
+  --accent-strong: #4fb7df;
+  --accent-ink: #0b1f2a;
+  --danger: #d98a5f;
+  --danger-bg: #42312a;
+  --ok: #7fcf9f;
+  --ok-bg: #2f4237;
+  --warn: #f2c94c;
+  --warn-bg: #4a4130;
+  --radius: 6px;
+}
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme="dark"]) {
+    color-scheme: light;
+    --bg: #f6f7f9;
+    --panel: #ffffff;
+    --panel-2: #eef1f5;
+    --field: #ffffff;
+    --line: #d8dde6;
+    --line-soft: #e5e8ee;
+    --text: #172033;
+    --muted: #697386;
+    --accent: #2563eb;
+    --accent-strong: #1d4ed8;
+    --accent-ink: #ffffff;
+    --danger: #c2410c;
+    --danger-bg: #fff3ed;
+    --ok: #047857;
+    --ok-bg: #ecfdf5;
+    --warn: #8a5a00;
+    --warn-bg: #fff7e0;
+  }
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 13px/1.45 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+}
+button, input, select, textarea { font: inherit; color: inherit; }
+a { color: var(--accent); }
+
+.btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel-2);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.btn:hover:not(:disabled) { filter: brightness(1.12); }
+.btn:disabled { opacity: 0.45; cursor: default; }
+.btn.primary { background: var(--accent-strong); border-color: var(--accent-strong); color: var(--accent-ink); font-weight: 600; }
+.btn.danger { background: var(--danger-bg); border-color: var(--danger); color: var(--danger); }
+.btn.ghost { background: transparent; border-color: transparent; }
+.btn.small { height: 24px; padding: 0 8px; font-size: 12px; }
+.icon-btn { width: 30px; padding: 0; }
+
+input[type="text"], input[type="number"], select, textarea {
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--field);
+  min-width: 0;
+}
+textarea { height: auto; padding: 8px; resize: vertical; }
+select:disabled { opacity: 0.5; }
+input[type="color"] { width: 30px; height: 28px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+input[type="checkbox"] { accent-color: var(--accent-strong); }
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.muted { color: var(--muted); }
+.row { display: flex; align-items: center; gap: 8px; }
+.grow { flex: 1; min-width: 0; }
+.ellipsis { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.hidden { display: none !important; }
+
+.chip {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 999px;
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.chip.imported, .chip.ok { background: var(--ok-bg); color: var(--ok); }
+.chip.pending, .chip.queued, .chip.warn { background: var(--warn-bg); color: var(--warn); }
+.chip.failed, .chip.err { background: var(--danger-bg); color: var(--danger); }
+.dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+.dot.on { background: var(--ok); }
+.dot.off { background: var(--danger); }
+
+.tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); }
+.tabs button {
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tabs button.active { color: var(--text); border-bottom-color: var(--accent-strong); font-weight: 600; }
+
+.tag-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 3px; flex: none; }
+.empty { padding: 24px 12px; text-align: center; color: var(--muted); }
+.log { max-height: 160px; overflow: auto; padding: 8px; font: 12px/1.5 Consolas, monospace; color: var(--muted); background: var(--field); border-radius: var(--radius); white-space: pre-wrap; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }

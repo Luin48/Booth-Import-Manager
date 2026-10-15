@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Booth Import Manager</title>
+    <link rel="stylesheet" href="ui/ui.css" />
+    <link rel="stylesheet" href="ui/sidepanel.css" />
+  </head>
+  <body>
+    <header class="sp-head">
+      <img src="icons/icon32.png" alt="" width="20" height="20" />
+      <strong>Booth Import</strong>
+      <span id="conn" class="conn"><span class="dot"></span><span id="connText">확인 중…</span></span>
+      <span class="grow"></span>
+      <button id="refreshBtn" class="btn icon-btn ghost" title="새로고침">↻</button>
+      <button id="manageBtn" class="btn small" title="태그·프로젝트 관리">관리</button>
+    </header>
+
+    <section id="offline" class="card offline hidden">
+      <strong>로컬 앱이 꺼져 있어요</strong>
+      <p class="muted">BoothImportManager.exe를 실행하면 자동으로 연결돼요. 윈도우 시작 시 자동 실행은 <code>scripts\install-startup.ps1</code>로 켤 수 있어요.</p>
+      <button id="retryBtn" class="btn primary">다시 연결</button>
+    </section>
+
+    <section id="target" class="card target">
+      <div class="step"><span class="num">1</span><select id="projectSel" class="grow" aria-label="유니티 프로젝트"></select></div>
+      <div class="step"><span class="num">2</span><select id="tagSel" class="grow" aria-label="태그"></select></div>
+      <div id="projectInfo" class="muted small-text"></div>
+    </section>
+
+    <nav class="tabs" role="tablist">
+      <button class="active" data-tab="files">받은 파일</button>
+      <button data-tab="queue">대기열</button>
+      <button data-tab="wish">찜 정리</button>
+    </nav>
+
+    <section id="tab-files" class="tab">
+      <div class="row filter-row">
+        <select id="fileFilter" aria-label="필터">
+          <option value="todo">미처리</option>
+          <option value="all">전체</option>
+          <option value="queued">대기 중</option>
+          <option value="imported">임포트됨</option>
+        </select>
+        <label class="row muted"><input id="selectAll" type="checkbox" /> 전체 선택</label>
+      </div>
+      <div id="fileList" class="list"></div>
+      <footer class="actions">
+        <button id="queueBtn" class="btn primary grow" disabled>3 ▶ 선택 파일 Unity로</button>
+        <button id="hideBtn" class="btn" disabled title="목록에서만 숨김">숨김</button>
+        <button id="deleteBtn" class="btn danger" disabled title="보관 폴더에서 삭제">삭제</button>
+      </footer>
+    </section>
+
+    <section id="tab-queue" class="tab hidden">
+      <div id="queueList" class="list"></div>
+    </section>
+
+    <section id="tab-wish" class="tab hidden">
+      <p class="muted">구매한 상품이 찜목록에 있으면 아래 규칙대로 정리해요. 먼저 미리보기로 확인한 뒤 실행돼요.</p>
+      <div class="card wish-rules">
+        <div class="wish-rule" data-cat="full">
+          <span class="chip ok">풀팩 구매</span>
+          <select class="wish-action"><option value="list">리스트로 분류</option><option value="remove">찜 삭제</option><option value="keep">그대로</option></select>
+          <input class="wish-name" type="text" value="풀팩 구매" aria-label="리스트 이름" />
+        </div>
+        <div class="wish-rule" data-cat="partial">
+          <span class="chip warn">일부 구매</span>
+          <select class="wish-action"><option value="list">리스트로 분류</option><option value="remove">찜 삭제</option><option value="keep">그대로</option></select>
+          <input class="wish-name" type="text" value="일부 구매" aria-label="리스트 이름" />
+        </div>
+        <div class="wish-rule" data-cat="single">
+          <span class="chip">구매 (옵션 1개)</span>
+          <select class="wish-action"><option value="list">리스트로 분류</option><option value="remove">찜 삭제</option><option value="keep">그대로</option></select>
+          <input class="wish-name" type="text" value="구매" aria-label="리스트 이름" />
+        </div>
+      </div>
+      <div class="row wish-buttons">
+        <button id="wishScanBtn" class="btn grow">미리보기</button>
+        <button id="wishApplyBtn" class="btn primary grow" disabled>실행</button>
+      </div>
+      <div id="wishSummary"></div>
+      <div id="wishList" class="list"></div>
+      <div id="wishLog" class="log hidden"></div>
+    </section>
+
+    <script type="module" src="ui/sidepanel.js"></script>
+  </body>
+</html>

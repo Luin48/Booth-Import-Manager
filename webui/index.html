@@ -22,6 +22,7 @@
           </button>
           <button id="refreshBtn" class="icon-btn" title="새로고침">↻</button>
           <button id="saveConfigBtn" class="primary-btn">설정 저장</button>
+          <button id="quitBtn" class="secondary-btn" title="로컬 앱 서버 종료">앱 종료</button>
         </div>
       </header>
 
@@ -43,6 +44,10 @@
           <label class="check-row">
             <input id="deleteAfterQueueInput" type="checkbox" />
             큐에 넣은 뒤 로컬 파일 삭제
+          </label>
+          <label class="check-row">
+            <input id="stayRunningInput" type="checkbox" />
+            이 탭을 닫아도 앱 계속 실행 (크롬 확장용)
           </label>
 
           <div class="hint">

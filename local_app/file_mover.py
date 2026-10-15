@@ -48,9 +48,14 @@ def unique_path(path: Path) -> Path:
     raise FileExistsError(f"Too many duplicate names for {path.name}")
 
 
-def move_completed_booth_file(filename: str) -> Path:
+def move_completed_booth_file(filename: str, full_path: str = "") -> Path:
     cfg = get_config()
     source = Path(cfg.download_folder) / Path(filename).name
+    # 크롬 다운로드 위치가 설정과 달라도, 크롬이 알려준 실제 경로에 파일이 있으면 그걸 쓴다
+    if full_path:
+        candidate = Path(full_path)
+        if candidate.name == Path(filename).name and is_supported_file(candidate):
+            source = candidate
     if not is_supported_file(source):
         raise FileNotFoundError(f"Supported downloaded file not found: {source}")
     if not wait_until_stable(source):

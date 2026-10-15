@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $root = Split-Path -Parent $PSScriptRoot
 Set-Location $root
@@ -11,6 +11,8 @@ python -m PyInstaller `
   --name BoothImportManager `
   --icon "assets\booth-import-manager-icon.ico" `
   --add-data "webui;webui" `
+  --add-data "unity_package;unity_package" `
+  --hidden-import tkinter `
   local_app\launcher.py `
   --distpath dist `
   --workpath build

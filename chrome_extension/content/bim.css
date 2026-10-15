@@ -1,0 +1,160 @@
+/* Booth Import Manager — 부스 페이지에 붙는 요소. 전부 .bim- 접두사 */
+.bim-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-family: "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  font-size: 13px;
+}
+.bim-select {
+  height: 30px;
+  max-width: 220px;
+  padding: 0 8px;
+  border: 1px solid #d0d5dd;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+}
+.bim-select:disabled { background: #f3f4f6; color: #9ca3af; }
+.bim-go {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: #2f3a45;
+  color: #fff;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bim-go:hover:not(:disabled) { background: #1f2933; }
+.bim-go:disabled { opacity: 0.45; cursor: default; }
+.bim-go.bim-busy { opacity: 0.6; cursor: progress; }
+.bim-compact .bim-select { height: 28px; max-width: 170px; }
+.bim-compact .bim-go { height: 28px; }
+
+.bim-fileline {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.bim-cardbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 0 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f4f6f8;
+}
+.bim-cardbar .bim-picker { margin-left: auto; }
+.bim-logo {
+  display: inline-block;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #4fb7df;
+  color: #0b1f2a;
+  font: 700 11px/1.4 "Segoe UI", system-ui, sans-serif;
+  letter-spacing: 0.04em;
+}
+
+.bim-chips { display: inline-flex; gap: 4px; flex-wrap: wrap; }
+.bim-chip {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font: 600 12px/1.6 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  background: #eef0f3;
+  color: #4b5563;
+  white-space: nowrap;
+}
+.bim-st-imported { background: #e3f6ea; color: #17663a; }
+.bim-st-pending, .bim-st-queued { background: #fff4d6; color: #8a5a00; }
+.bim-st-failed { background: #fde7e1; color: #a33a17; }
+.bim-st-no_package { background: #eef0f3; color: #6b7280; }
+
+.bim-banner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 12px auto;
+  max-width: 980px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #2f3a45;
+  color: #e5e7eb;
+  font: 14px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+}
+.bim-banner .bim-go { background: #4fb7df; color: #0b1f2a; }
+
+.bim-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  z-index: 2147483000;
+  max-width: min(560px, calc(100vw - 32px));
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #2f3a45;
+  color: #f3f4f6;
+  font: 14px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.25);
+  opacity: 0;
+  transform: translate(-50%, 12px);
+  transition: opacity 0.18s, transform 0.18s;
+  pointer-events: none;
+}
+.bim-toast.bim-show { opacity: 1; transform: translate(-50%, 0); }
+.bim-toast-ok { border-left: 4px solid #7fcf9f; }
+.bim-toast-error { border-left: 4px solid #d98a5f; }
+.bim-toast-warn { border-left: 4px solid #f2c94c; }
+
+.bim-panel {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 2147482000;
+  width: 340px;
+  max-width: calc(100vw - 32px);
+  border-radius: 10px;
+  background: #fff;
+  color: #1f2937;
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  font: 13px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  overflow: hidden;
+}
+.bim-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: #2f3a45;
+  color: #fff;
+}
+.bim-panel-title { font-weight: 700; }
+.bim-x {
+  margin-left: auto;
+  width: 24px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+}
+.bim-panel-body { display: grid; gap: 8px; padding: 10px; }
+.bim-collapsed .bim-panel-body { display: none; }
+.bim-note { color: #6b7280; }
+.bim-warn { color: #a33a17; }
+.bim-link { color: #1d6f91; font-weight: 600; text-decoration: none; }
+.bim-free { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid #eef0f3; }
+.bim-free-name { font-weight: 600; word-break: break-all; }

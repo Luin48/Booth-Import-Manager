@@ -1,0 +1,73 @@
+name: Build & Release
+
+# v*.*.* 태그를 푸시하거나, Actions 탭 → "Build & Release" → Run workflow 로 실행하면
+# 윈도우에서 exe 를 빌드하고, 크롬 확장 zip / 유니티 패키지와 함께 릴리즈를 만든다.
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "버전 (예: 0.3.0)"
+        required: true
+        default: "0.3.0"
+      prerelease:
+        description: "프리릴리즈로 올리기"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      # 태그 푸시면 태그에서(v 빼고), 수동 실행이면 입력값에서
+      VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install PyInstaller
+        run: python -m pip install --upgrade pip pyinstaller pillow
+
+      - name: Syntax check
+        run: python -m compileall -q local_app
+
+      - name: Build exe
+        shell: pwsh
+        run: ./scripts/build-exe.ps1
+
+      - name: Package release files
+        shell: pwsh
+        run: |
+          $v = $env:VERSION.TrimStart("v")
+          New-Item -ItemType Directory -Force release | Out-Null
+          Copy-Item dist/BoothImportManager.exe "release/BoothImportManager-v$v.exe"
+          Compress-Archive -Path chrome_extension/* -DestinationPath "release/BoothImportManager-ChromeExtension-v$v.zip" -Force
+          python scripts/make_unitypackage.py "release/BoothImportManager-Unity-v$v.unitypackage"
+          Get-ChildItem release | Format-Table Name, Length
+
+      - name: Create GitHub release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = $env:VERSION.TrimStart("v")
+          $flags = @()
+          if ("${{ inputs.prerelease }}" -eq "true") { $flags += "--prerelease" }
+          gh release view "v$v" 2>$null
+          if ($LASTEXITCODE -eq 0) {
+            # 태그 푸시로 이미 있으면 파일과 본문만 갱신
+            gh release upload "v$v" (Get-ChildItem release/*).FullName --clobber
+            gh release edit "v$v" --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md"
+            exit 0
+          }
+          gh release create "v$v" (Get-ChildItem release/*).FullName `
+            --title "Booth Import Manager v$v" `
+            --notes-file "docs/release-notes-v$v.md" `
+            --target $env:GITHUB_SHA @flags

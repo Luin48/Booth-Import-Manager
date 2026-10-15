@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Booth Import Manager 관리</title>
+    <link rel="icon" href="icons/icon32.png" />
+    <link rel="stylesheet" href="ui/ui.css" />
+    <link rel="stylesheet" href="ui/manage.css" />
+  </head>
+  <body>
+    <header class="m-head">
+      <img src="icons/icon48.png" alt="" width="28" height="28" />
+      <div>
+        <h1>Booth Import Manager</h1>
+        <div class="muted"><span id="connDot" class="dot"></span> <span id="connText">확인 중…</span></div>
+      </div>
+      <span class="grow"></span>
+      <span id="saveState" class="muted"></span>
+    </header>
+
+    <nav class="tabs m-tabs" role="tablist">
+      <button data-tab="projects" class="active">프로젝트</button>
+      <button data-tab="tags">태그</button>
+      <button data-tab="assign">프로젝트별 태그</button>
+      <button data-tab="settings">설정</button>
+    </nav>
+
+    <main>
+      <div id="offline" class="card notice hidden">
+        <strong>로컬 앱이 꺼져 있어요.</strong> BoothImportManager.exe를 실행한 뒤 <button id="retryBtn" class="btn small">다시 연결</button>
+      </div>
+
+      <!-- 프로젝트 -->
+      <section id="tab-projects" class="tab">
+        <div class="card block">
+          <h2>프로젝트 폴더</h2>
+          <p class="muted">ALCOM / VCC 프로젝트들이 모여 있는 폴더를 등록하면 안의 유니티 프로젝트를 자동으로 찾아요.</p>
+          <div id="rootList" class="stack"></div>
+          <div class="row wrap">
+            <input id="rootInput" type="text" class="grow" placeholder="예: C:\Users\me\ALCOM\Projects" />
+            <button id="rootPickBtn" class="btn">폴더 선택…</button>
+            <button id="rootAddBtn" class="btn primary">추가</button>
+          </div>
+          <div id="suggestions" class="suggest"></div>
+          <details class="extra">
+            <summary>폴더 밖에 있는 프로젝트 하나만 추가</summary>
+            <div class="row wrap">
+              <input id="extraInput" type="text" class="grow" placeholder="유니티 프로젝트 폴더 (Assets가 들어 있는 폴더)" />
+              <button id="extraPickBtn" class="btn">폴더 선택…</button>
+              <button id="extraAddBtn" class="btn">추가</button>
+            </div>
+            <div id="extraList" class="stack"></div>
+          </details>
+        </div>
+
+        <div class="card block">
+          <div class="row">
+            <h2 class="grow">인식된 프로젝트</h2>
+            <label class="row muted"><input id="showHidden" type="checkbox" /> 숨긴 프로젝트도 보기</label>
+          </div>
+          <div class="table-wrap">
+            <table class="ptable">
+              <thead>
+                <tr>
+                  <th>프로젝트</th>
+                  <th>상태</th>
+                  <th>유니티 패키지</th>
+                  <th>임포트 위치 (Asset root)</th>
+                  <th>목록</th>
+                </tr>
+              </thead>
+              <tbody id="projectRows"></tbody>
+            </table>
+          </div>
+          <p class="muted">유니티 패키지가 설치된 프로젝트는, 꺼져 있을 때 보낸 임포트도 다음에 켜면 자동으로 처리해요.</p>
+        </div>
+      </section>
+
+      <!-- 태그 -->
+      <section id="tab-tags" class="tab hidden">
+        <div class="card block">
+          <h2>태그 라이브러리</h2>
+          <p class="muted">태그 이름이 유니티 안의 폴더 이름이 돼요 (<code>Asset root/태그/…</code>). "태그 없음"은 Asset root 바로 아래로 들어가요.</p>
+          <div id="tagRows" class="stack"></div>
+          <div class="row wrap add-tag">
+            <input id="newTagColor" type="color" value="#2563eb" />
+            <input id="newTagName" type="text" class="grow" placeholder="새 태그 이름 (예: 06.이펙트)" />
+            <label class="row muted"><input id="newTagAssignAll" type="checkbox" checked /> 모든 프로젝트에 추가</label>
+            <button id="addTagBtn" class="btn primary">추가</button>
+          </div>
+        </div>
+        <div class="card block">
+          <h2>태그 세트 복사 / 붙여넣기</h2>
+          <p class="muted">다른 PC나 친구와 태그 구성을 공유할 때 써요. 붙여넣으면 이름이 같은 태그는 건너뛰고 새 것만 추가돼요.</p>
+          <div class="row wrap">
+            <button id="exportTagsBtn" class="btn">현재 태그 복사</button>
+            <button id="importTagsBtn" class="btn">붙여넣은 태그 추가</button>
+          </div>
+          <textarea id="tagTransfer" rows="5" placeholder="여기에 붙여넣기 (JSON 또는 한 줄에 하나씩 태그 이름)"></textarea>
+        </div>
+      </section>
+
+      <!-- 프로젝트별 태그 -->
+      <section id="tab-assign" class="tab hidden">
+        <div class="card block">
+          <h2>프로젝트별 태그</h2>
+          <p class="muted">체크한 태그만 그 프로젝트의 태그 목록에 보여요. "제한 없음"이면 전체 태그를 다 써요.</p>
+          <div class="table-wrap">
+            <table id="matrix" class="matrix"></table>
+          </div>
+        </div>
+      </section>
+
+      <!-- 설정 -->
+      <section id="tab-settings" class="tab hidden">
+        <div class="card block form">
+          <h2>폴더</h2>
+          <label>Chrome 다운로드 폴더 <span class="muted">(크롬 설정의 다운로드 위치와 같아야 해요)</span>
+            <div class="row"><input id="downloadFolder" type="text" class="grow" /><button class="btn pick" data-target="downloadFolder">선택…</button></div>
+          </label>
+          <label>보관 폴더 <span class="muted">(받은 파일을 모아두는 곳, 프로젝트별 큐는 이 안의 _projects)</span>
+            <div class="row"><input id="intakeFolder" type="text" class="grow" /><button class="btn pick" data-target="intakeFolder">선택…</button></div>
+          </label>
+          <label>공용 큐 폴더 <span class="muted">(v0.2 방식, 프로젝트를 안 고르고 보낼 때)</span>
+            <div class="row"><input id="queueFolder" type="text" class="grow" /><button class="btn pick" data-target="queueFolder">선택…</button></div>
+          </label>
+          <h2>동작</h2>
+          <label class="check"><input id="autoQueue" type="checkbox" /> 'Unity로' 버튼: 다운로드가 끝나면 바로 큐에 넣기</label>
+          <label class="check"><input id="deleteLocal" type="checkbox" /> 큐에 넣은 뒤 보관 폴더의 원본 삭제</label>
+          <label class="check"><input id="stayRunning" type="checkbox" /> 앱 웹 화면을 닫아도 앱 계속 실행</label>
+          <label>로컬 앱 포트 <span class="muted">(보통 7831)</span>
+            <div class="row"><input id="port" type="number" min="1024" max="65535" style="width: 120px" /></div>
+          </label>
+          <div class="row wrap">
+            <button id="saveSettingsBtn" class="btn primary">설정 저장</button>
+            <button id="quitBtn" class="btn danger">로컬 앱 종료</button>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script type="module" src="ui/manage.js"></script>
+  </body>
+</html>
