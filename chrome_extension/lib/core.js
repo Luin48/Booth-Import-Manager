@@ -139,6 +139,61 @@ async function onLive(list) {
   }
   const proj = await chrome.storage.local.get(PROJ_KEY);
   if (Date.now() - (proj[PROJ_KEY]?.at || 0) > 5 * 60 * 1000) scanProjects().catch(() => {});
+  for (const unity of alive) syncInstalled(unity).catch(() => {});
+}
+
+// ---- 프로젝트에 이미 들어 있는 상품 (썸네일 아이콘이 붙은 폴더) → 라이브러리 '임포트됨' 표시 ----------
+// 썸네일 매칭으로 아이콘을 붙인 상품도 BOOTH 라이브러리에 그 프로젝트 '임포트됨'으로 보이게,
+// 유니티(BIM 1.1.0+)의 /bim/installed 를 읽어 숨김 작업 기록(source: "installed")으로 저장한다.
+// 작업 기록에 넣어 두므로 v1.1.0 확장으로 돌아가도 표시가 남는다.
+const installedSeen = new Map(); // project key -> { stamp, at }
+
+export async function syncInstalled(unity, { force = false } = {}) {
+  if (!unity?.key || !unity.iconStamp) return null; // 1.1.0 미만 유니티 패키지
+  const prev = installedSeen.get(unity.key);
+  if (!force && prev && prev.stamp === unity.iconStamp && Date.now() - prev.at < 10 * 60 * 1000) return null;
+  installedSeen.set(unity.key, { stamp: unity.iconStamp, at: Date.now() });
+  const res = await unityApi("/bim/installed", {}, { unity, timeoutMs: 20000 });
+  const items = new Map();
+  for (const it of res?.items || []) if (it.itemId && !items.has(it.itemId)) items.set(it.itemId, it);
+  const projects = (await chrome.storage.local.get(PROJ_KEY))[PROJ_KEY]?.list || [];
+  const name = projects.find((p) => p.key === unity.key)?.name || unity.name || unity.key;
+  return updateJobs((all) => {
+    let added = 0;
+    let removed = 0;
+    const has = new Set();
+    for (const j of Object.values(all)) {
+      if (j.project !== unity.key || !j.itemId) continue;
+      if (j.source === "installed") {
+        if (!items.has(j.itemId)) {
+          delete all[j.jobId];
+          removed++;
+        } else has.add(j.itemId);
+      } else if (j.state === "imported") has.add(j.itemId); // BIM 으로 임포트한 기록이 이미 있음
+    }
+    for (const [itemId, it] of items) {
+      if (has.has(itemId)) continue;
+      const jobId = `inst_${String(unity.key).replace(/[^\w-]/g, "_").slice(0, 40)}_${itemId}`;
+      all[jobId] = {
+        jobId,
+        source: "installed",
+        hidden: true,
+        project: unity.key,
+        projectName: name,
+        tag: "",
+        itemId,
+        itemName: it.title || "",
+        downloadableId: "",
+        filename: "",
+        folder: it.folder || "",
+        state: "imported",
+        createdAt: now(),
+        updatedAt: now(),
+      };
+      added++;
+    }
+    return { added, removed, total: items.size };
+  });
 }
 
 export async function pushUnityConfig(cfg, unity) {
@@ -249,7 +304,8 @@ export function updateJobs(mutator) {
     const jobs = await getJobs();
     const result = await mutator(jobs);
     // 기록이 너무 많아지면 오래된 완료 기록부터 정리 (최대 500개)
-    const ids = Object.keys(jobs);
+    // (설치 확인 기록 source=installed 는 유니티가 다시 알려주니 정리 대상에서 뺀다)
+    const ids = Object.keys(jobs).filter((id) => jobs[id].source !== "installed");
     if (ids.length > 500) {
       ids
         .filter((id) => !ACTIVE.has(jobs[id].state))
@@ -811,7 +867,10 @@ export async function route(path, method = "GET", body = {}) {
       return unityApi("/bim/reveal", { path: body.path });
     case "GET /api/jobs": {
       await refreshJobs({ force: true });
-      return Object.values(await getJobs()).sort((a, b) => b.createdAt - a.createdAt);
+      // 설치 확인 기록(썸네일 매칭 등으로 이미 들어 있는 상품)은 보낸 기록 목록에서 뺀다
+      return Object.values(await getJobs())
+        .filter((j) => j.source !== "installed")
+        .sort((a, b) => b.createdAt - a.createdAt);
     }
     case "POST /api/jobs/cancel":
       return cancelJob(body.jobId);
