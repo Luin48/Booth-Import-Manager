@@ -345,7 +345,7 @@ namespace BoothThumbnailMatcher
             while (off < count)
             {
                 var r = s.Read(buf, off, count - off);
-                if (r <= 0) return off > 0 && false;
+                if (r <= 0) return false;
                 off += r;
             }
             return true;

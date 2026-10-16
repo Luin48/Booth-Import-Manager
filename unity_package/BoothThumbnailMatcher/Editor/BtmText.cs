@@ -17,6 +17,7 @@ namespace BoothThumbnailMatcher
         private static readonly Regex Version = new Regex(@"(?<![a-z])(?:ver\.?|v)\s?\d+(?:[._]\d+)*[a-z]?(?![a-z])|(?<=[\s_-])\d+(?:[._]\d+){1,3}(?=$|[\s_-])", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex Ext = new Regex(@"\.(zip|unitypackage|7z|rar|txt|pdf)$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
         private static readonly Regex Seps = new Regex(@"\s*(?:/|／|\||｜|\s[-－~〜]\s|:|：)\s*", RegexOptions.Compiled);
+        private static readonly Regex Quotes = new Regex(@"[『「]([^』」]+)[』」]", RegexOptions.Compiled);
         private static readonly Regex Camel = new Regex(@"(?<=[a-z])(?=[A-Z])", RegexOptions.Compiled);
 
         /// <summary>비교용 정규화: NFKC, 소문자, 글자·숫자만 남기고 나머지는 공백</summary>
@@ -40,7 +41,15 @@ namespace BoothThumbnailMatcher
                     space = true;
                 }
             }
-            return sb.ToString().Trim();
+            // 숫자 앞의 0 은 무시 (LV.05 = 𝐋𝐕.𝟓)
+            var tokens = sb.ToString().Trim().Split(' ');
+            for (var i = 0; i < tokens.Length; i++)
+                if (tokens[i].Length > 1 && tokens[i].All(char.IsDigit))
+                {
+                    var t = tokens[i].TrimStart('0');
+                    tokens[i] = t.Length == 0 ? "0" : t;
+                }
+            return string.Join(" ", tokens);
         }
 
         public static string Compact(string normalized) => normalized.Replace(" ", "");
@@ -58,6 +67,8 @@ namespace BoothThumbnailMatcher
             Add(name);
             var core = Brackets.Replace(name, " ");
             Add(core);
+            // 『断罪バニー』 처럼 따옴표 괄호 안이 상품 이름인 경우
+            foreach (Match q in Quotes.Matches(name)) Add(q.Groups[1].Value);
             foreach (var part in Seps.Split(core)) Add(part);
             Add(Version.Replace(core, " "));
             return list;
@@ -76,6 +87,28 @@ namespace BoothThumbnailMatcher
                 if (Compact(n).Length >= 3 && !list.Contains(n)) list.Add(n);
             }
             return list;
+        }
+
+        // ---- 흔한 단어 (아바타 이름 등) ------------------------------------------------
+        /// <summary>
+        /// 여러 샵의 파일 이름에 공통으로 나오는 단어 (airi, shinano, rurune, material, v1 …).
+        /// 라이브러리를 읽을 때 계산한다. 이런 단어만으로 된 폴더(아바타별 하위 폴더)는 상품으로 보지 않는다.
+        /// </summary>
+        public static HashSet<string> Common { get; private set; } = new HashSet<string>();
+
+        public static void SetCommon(IEnumerable<string> tokens) => Common = new HashSet<string>(tokens);
+
+        public static IEnumerable<string> TokensOf(string normalized) =>
+            normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(t => t.Length >= 2 || IsCjk(t));
+
+        public static string StripCommon(string normalized) =>
+            string.Join(" ", normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries).Where(t => !Common.Contains(t)));
+
+        /// <summary>흔한 단어(와 숫자)로만 된 이름인지 — 예: "Airi", "Mizuki_Rurune", "Shinano 2"</summary>
+        public static bool CommonOnly(string normalized)
+        {
+            var t = normalized.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            return t.Length > 0 && t.All(x => Common.Contains(x) || x.All(char.IsDigit));
         }
 
         /// <summary>비교를 빠르게 하려고 미리 계산해 둔 문자열 (정규화 결과·단어·글자쌍)</summary>

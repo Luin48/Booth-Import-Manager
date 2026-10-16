@@ -77,6 +77,7 @@ namespace BoothThumbnailMatcher
                 var data = JsonUtility.FromJson<FileData>(File.ReadAllText(FilePath, Encoding.UTF8)) ?? new FileData();
                 SavedAt = data.savedAt ?? "";
                 Items = (data.items ?? new List<Item>()).Where(i => !string.IsNullOrEmpty(i.itemId)).ToList();
+                ComputeCommon(Items);
                 foreach (var i in Items) Prepare(i);
                 ById = new Dictionary<string, Item>();
                 foreach (var i in Items) ById[i.itemId] = i;
@@ -102,6 +103,30 @@ namespace BoothThumbnailMatcher
             return BtmText.Compact(BtmText.Norm(shopName));
         }
 
+        /// <summary>여러 샵의 파일 이름에 나오는 단어 = 아바타 이름 등 (샵 수의 2% 이상, 최소 5곳)</summary>
+        private static void ComputeCommon(List<Item> items)
+        {
+            var byToken = new Dictionary<string, HashSet<string>>();
+            var shops = new HashSet<string>();
+            foreach (var i in items)
+            {
+                var shop = !string.IsNullOrEmpty(i.shopUrl) ? i.shopUrl : i.shopName ?? "";
+                shops.Add(shop);
+                var tokens = new HashSet<string>();
+                foreach (var f in i.files ?? new List<FileInfo>())
+                    foreach (var v in BtmText.FileVariants(f.label))
+                        foreach (var t in BtmText.TokensOf(v))
+                            tokens.Add(t);
+                foreach (var t in tokens)
+                {
+                    if (!byToken.TryGetValue(t, out var set)) byToken[t] = set = new HashSet<string>();
+                    set.Add(shop);
+                }
+            }
+            var threshold = Math.Max(5, shops.Count * 0.02);
+            BtmText.SetCommon(byToken.Where(kv => kv.Value.Count >= threshold).Select(kv => kv.Key));
+        }
+
         public static void Prepare(Item i)
         {
             i.name = i.name ?? "";
@@ -110,7 +135,12 @@ namespace BoothThumbnailMatcher
             var names = BtmText.NameVariants(i.name);
             foreach (var f in i.files)
                 foreach (var v in BtmText.FileVariants(f.label))
+                {
                     if (!names.Contains(v)) names.Add(v);
+                    // "hadasoi_airi.zip" → "hadasoi" (아바타 이름을 뗀 것도 후보로)
+                    var stripped = BtmText.StripCommon(v);
+                    if (stripped != v && BtmText.Compact(stripped).Length >= 3 && !names.Contains(stripped)) names.Add(stripped);
+                }
             i.nameVariants = BtmText.PrepareAll(names);
             i.shopKey = ShopKeyOf(i.shopUrl, i.shopName);
             var shops = BtmText.NameVariants(i.shopName);

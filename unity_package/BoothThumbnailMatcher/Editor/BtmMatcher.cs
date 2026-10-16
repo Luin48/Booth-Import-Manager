@@ -33,6 +33,7 @@ namespace BoothThumbnailMatcher
             public bool generic;
             public bool hasIcon;
             public bool category;
+            public bool common;               // 아바타 이름 같은 흔한 단어로만 된 폴더 이름
         }
 
         public class Candidate
@@ -100,6 +101,7 @@ namespace BoothThumbnailMatcher
                         pres = BtmText.FolderVariants(name),
                         generic = BtmText.IsGeneric(name),
                     };
+                    child.common = BtmText.CommonOnly(child.pres[0].Norm);
                     child.hasIcon = BoothFolderIcons.HasIcon(child.guid);
                     if (isHidden != null && isHidden(child.guid)) continue;
                     node.children.Add(child);
@@ -335,6 +337,10 @@ namespace BoothThumbnailMatcher
         private static BtmLibrary.Item Visit(Node node, string shopKey, Ctx ctx, int free = 0)
         {
             if (node.generic) return null;
+            // 모르는 폴더를 3단계 넘게 내려가면 그만 (상품 안쪽 깊은 곳)
+            if (free >= 3) return null;
+            // 상품 안의 아바타별 하위 폴더 (Airi, Shinano, Mizuki_Rurune …)
+            if (node.common && free >= 1 && !ctx.byPath.ContainsKey(node.path)) return null;
 
             // 원본 파일로 이미 정해진 폴더
             if (ctx.byPath.TryGetValue(node.path, out var known))
@@ -370,12 +376,24 @@ namespace BoothThumbnailMatcher
             var bestShop = shopCands.Count > 0 ? shopCands[0].score : 0;
             var hasSubs = node.children.Any(c => !c.generic);
 
+            // 모르는 폴더 2단계 아래: 이름이 거의 같을 때만 확인 목록에, 더 내려가지 않음
+            if (free >= 2)
+            {
+                if (bestItem >= 0.9)
+                {
+                    var rr = new Result { folder = node, kind = "item", source = "name", status = Status.Review };
+                    rr.candidates.AddRange(itemCands);
+                    ctx.byPath[node.path] = rr;
+                }
+                return null;
+            }
+
             // 샵 폴더
             if (bestShop >= ShopScore && bestShop >= bestItem && hasSubs)
             {
                 var r = new Result { folder = node, kind = "shop", source = "name" };
                 r.candidates.AddRange(shopCands);
-                r.status = Decisive(shopCands, ShopScore) ? Status.Auto : Status.Review;
+                r.status = Decisive(shopCands, ShopScore) && free <= 1 ? Status.Auto : Status.Review;
                 if (r.status == Status.Auto) r.chosen = shopCands[0];
                 ctx.byPath[node.path] = r;
                 var key = shopCands[0].item.shopKey;
@@ -384,7 +402,7 @@ namespace BoothThumbnailMatcher
             }
 
             // 상품 폴더
-            var autoMin = shopKey != null && itemCands.Count > 0 && itemCands[0].item.shopKey == shopKey ? AutoScore - 0.05 : AutoScore;
+            var autoMin = shopKey != null && itemCands.Count > 0 && itemCands[0].item.shopKey == shopKey ? 0.88 : AutoScore;
             if (bestItem >= ReviewScore && bestItem >= bestShop - 0.05)
             {
                 var r = new Result { folder = node, kind = "item", source = "name" };
@@ -392,11 +410,15 @@ namespace BoothThumbnailMatcher
                 // 자동은: 점수 충분 + 2등과 차이 + 샵/분류 바로 아래(또는 한 단계 아래에서 거의 같은 이름) + 샵 안에서는 그 샵 상품만
                 var placeOk = free == 0 || free == 1 && itemCands[0].score >= 0.95;
                 var shopOk = shopKey == null || itemCands[0].item.shopKey == shopKey;
-                r.status = Decisive(itemCands, autoMin) && placeOk && shopOk ? Status.Auto : Status.Review;
+                // 샵 폴더 안에서는 그 샵 상품끼리만 2등과 차이를 본다
+                var pool = shopKey != null ? itemCands.Where(c => c.item.shopKey == shopKey).ToList() : itemCands;
+                r.status = Decisive(pool, autoMin) && placeOk && shopOk ? Status.Auto : Status.Review;
                 if (r.status == Status.Auto) r.chosen = itemCands[0];
                 // 애매한데 아래 폴더가 더 잘 맞을 수 있으면(샵 폴더일 수도) 아래도 본다
                 if (r.status == Status.Review && hasSubs && bestItem < 0.75)
                 {
+                    var before = new HashSet<string>(ctx.byPath.Keys);
+                    var unmatchedBefore = ctx.unmatched.Count;
                     var childHits = node.children.Select(c => Visit(c, shopKey, ctx, free + 1)).Where(i => i != null).ToList();
                     if (childHits.Count > 0)
                     {
@@ -404,6 +426,9 @@ namespace BoothThumbnailMatcher
                         InferShop(node, childHits, shopCands, ctx);
                         return null;
                     }
+                    // 아래에서 확실한 게 없으면 아래 결과는 버리고 이 폴더만 확인 목록에
+                    foreach (var added in ctx.byPath.Keys.Where(key => !before.Contains(key)).ToList()) ctx.byPath.Remove(added);
+                    ctx.unmatched.RemoveRange(unmatchedBefore, ctx.unmatched.Count - unmatchedBefore);
                 }
                 ctx.byPath[node.path] = r;
                 return r.status == Status.Auto ? r.chosen.item : null;
