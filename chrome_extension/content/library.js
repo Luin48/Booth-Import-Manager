@@ -13,15 +13,19 @@
     return [...cards];
   }
 
+  // 부스 상품 링크만 (X/페이스북 공유 링크에도 /items/ 가 들어 있어서 걸러냄)
+  const isItemLink = (a) => /^https:\/\/([\w-]+\.)?booth\.pm\/(?:[\w-]+\/)?items\/\d+/.test(a.href);
+
   function cardInfo(card) {
-    const link = card.querySelector('a[href*="/items/"]');
+    const itemLinks = [...card.querySelectorAll('a[href*="/items/"]')].filter(isItemLink);
+    const link = itemLinks[0];
     const shopBlock = card.closest(".l-order-detail-by-shop");
     const shop =
       shopBlock?.querySelector(".l-order-detail-sheet-group-header a") ||
       [...card.querySelectorAll("a")].find((a) => /^https:\/\/[^/]+\.booth\.pm\/?$/.test(a.href) && !a.href.includes("accounts."));
     const title =
+      itemLinks.map((a) => a.textContent.trim()).find(Boolean) ||
       card.querySelector(".font-bold")?.textContent ||
-      [...card.querySelectorAll('a[href*="/items/"]')].map((a) => a.textContent.trim()).find(Boolean) ||
       "";
     return {
       itemId: idFromHref(link?.href, "items"),
