@@ -23,7 +23,7 @@ namespace BoothImportManager
     [InitializeOnLoad]
     public static class BimContext
     {
-        public const string Version = "1.1.0";
+        public const string Version = "1.0.1";
         public const string PackageName = "local.booth-import-manager";
 
         public static string ProjectPath { get; private set; } = "";

@@ -25,7 +25,7 @@
     return node;
   };
 
-  const state = { boot: null, bootPromise: null, listeners: new Set() };
+  const state = { boot: null, bootPromise: null, listeners: new Set(), presetMode: null, presetTag: "" };
 
   const pickers = new Set(); // 화면에 있는 선택기들 (프로젝트 목록/상태 갱신용)
 
@@ -89,11 +89,13 @@
   document.addEventListener("visibilitychange", refreshLive);
 
   const UNTAGGED = "태그 없음";
+  const PRESET = "__preset__"; // 프리셋 모드일 때만 보이는 '프로젝트' — 태그만 고른다
 
   function tagsFor(projectKey) {
     const boot = state.boot;
     if (!boot) return [];
     const all = boot.config.tags || [];
+    if (projectKey === PRESET) return all;
     const project = boot.projects.find((p) => p.key === projectKey);
     if (!project || !Array.isArray(project.tags)) return all;
     const allowed = new Set(project.tags);
@@ -143,12 +145,13 @@
     const root = el("span", { class: `bim-picker${compact ? " bim-compact" : ""}` }, dot, projectSel, tagSel, go);
     const updateLive = (offline = false) => {
       const p = state.boot?.projects?.find((x) => x.key === projectSel.value);
-      const st = offline ? "unknown" : !p ? "none" : p.running ? "on" : "off";
+      const st = projectSel.value === PRESET ? "preset" : offline ? "unknown" : !p ? "none" : p.running ? "on" : "off";
       dot.className = `bim-dot bim-dot-${st}`;
       const text = {
         on: "유니티 실행 중 — 바로 임포트돼요",
         off: `유니티 꺼짐 — 켜면 자동으로 임포트돼요${p?.pending ? ` (대기 ${p.pending}개)` : ""}`,
         none: "프로젝트를 고르세요",
+        preset: "프리셋에 담는 중 — 태그를 고르고 파일 옆 ＋ 프리셋",
         unknown: "로컬 앱에 연결할 수 없어요",
       }[st];
       dot.title = text;
@@ -159,14 +162,19 @@
     const getChoice = () => (projectSel.value && tagSel.value ? { project: projectSel.value, tag: tagSel.value } : null);
     const changed = () => {
       updateLive();
-      if (go) go.disabled = !getChoice();
-      onChange?.(getChoice());
+      const isPreset = projectSel.value === PRESET;
+      root.classList.toggle("bim-preset-mode", isPreset);
+      if (go) {
+        go.disabled = !getChoice() || isPreset;
+        go.classList.toggle("bim-hidden-soft", isPreset);
+      }
+      onChange?.(getChoice(), projectSel.value);
     };
 
     const fillTags = (keepValue) => {
       const projectKey = projectSel.value;
       const tags = tagsFor(projectKey);
-      const remembered = keepValue ?? state.boot?.lastTagByProject?.[projectKey] ?? "";
+      const remembered = keepValue ?? (projectKey === PRESET ? state.presetTag : state.boot?.lastTagByProject?.[projectKey]) ?? "";
       tagSel.replaceChildren(el("option", { value: "", text: projectKey ? "태그 선택" : "← 프로젝트 먼저" }));
       for (const t of tags) tagSel.append(el("option", { value: t.name, text: t.name }));
       tagSel.disabled = !projectKey;
@@ -174,20 +182,41 @@
       changed();
     };
 
-    const fill = () => {
+    // force: 프리셋 모드가 바뀌었을 때 — 직접 고른 값도 무시하고 다시 맞춘다
+    // 프리셋 모드에서는 프로젝트 칸을 '📁 프리셋' 하나로 고정 (태그만 고름)
+    const fill = (force = false) => {
       const boot = state.boot;
-      const keepProject = touched ? projectSel.value : "";
-      const keepTag = touched ? tagSel.value : undefined;
+      if (force) touched = false;
+      if (state.presetMode) {
+        const keepTag = projectSel.value === PRESET ? tagSel.value : undefined;
+        projectSel.replaceChildren(el("option", { value: PRESET, text: `📁 프리셋: ${state.presetMode}` }));
+        projectSel.value = PRESET;
+        projectSel.disabled = true;
+        projectSel.title = "프리셋 모드에서는 프로젝트를 고르지 않아요 (맨 위 BIM 줄에서 '담기 끔'으로 끄기)";
+        fillTags(keepTag);
+        return;
+      }
+      projectSel.disabled = false;
+      projectSel.title = "유니티 프로젝트";
+      const keepProject = touched && projectSel.value !== PRESET ? projectSel.value : "";
+      const keepTag = keepProject ? tagSel.value : undefined;
       projectSel.replaceChildren(el("option", { value: "", text: boot?.projects?.length ? "프로젝트 선택" : "프로젝트 선택 (유니티를 켜면 목록이 생겨요)" }));
       for (const p of boot?.projects || []) projectSel.append(el("option", { value: p.key, text: projectLabel(p) }));
       const want = keepProject || boot?.lastProject;
       if (want && boot.projects.some((p) => p.key === want)) projectSel.value = want;
-      fillTags(keepProject ? keepTag : undefined);
+      fillTags(keepTag);
     };
 
     const remember = () => {
       const choice = getChoice();
       if (!choice) return;
+      if (choice.project === PRESET) {
+        state.presetTag = choice.tag; // 프리셋 태그는 기억만 (마지막 프로젝트로 저장하지 않음)
+        for (const other of document.querySelectorAll(".bim-picker")) {
+          if (other !== root) other.dispatchEvent(new CustomEvent("bim-sync", { detail: choice }));
+        }
+        return;
+      }
       if (state.boot) {
         state.boot.lastProject = choice.project;
         state.boot.lastTagByProject = { ...(state.boot.lastTagByProject || {}), [choice.project]: choice.tag };
@@ -225,6 +254,7 @@
     // 아직 직접 고르지 않은 선택기는 다른 곳에서 고른 값을 따라감
     root.addEventListener("bim-sync", (e) => {
       if (touched) return;
+      if ((e.detail.project === PRESET) !== (projectSel.value === PRESET)) return; // 모드가 다르면 따라가지 않음
       projectSel.value = e.detail.project;
       fillTags(e.detail.tag);
     });
@@ -269,6 +299,13 @@
   window.BIM = {
     send,
     el,
+    PRESET,
+    /** 프리셋 모드 켜기(프리셋 이름)/끄기(null) — 선택기에 '프리셋' 항목을 넣고 뺀다 */
+    setPresetMode(name) {
+      if ((state.presetMode || null) === (name || null)) return;
+      state.presetMode = name || null;
+      for (const p of pickers) p.refill(true);
+    },
     bootstrap,
     picker,
     statusChips,

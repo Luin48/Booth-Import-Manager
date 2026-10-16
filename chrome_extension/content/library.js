@@ -1,6 +1,6 @@
 // accounts.booth.pm/library — 파일마다 [프로젝트▾][태그▾][▶ Unity로] 붙이기
 (() => {
-  const { el, send, picker, statusChips, toast } = window.BIM;
+  const { el, send, picker, statusChips, toast, PRESET } = window.BIM;
   const idFromHref = (href, kind) => (String(href || "").match(new RegExp(`${kind}/(\\d+)`)) || [])[1] || "";
 
   // 라이브러리(div.bg-white 카드)와 주문 상세(.sheet + .legacy-list-item) 둘 다 지원
@@ -196,6 +196,7 @@
       r.btn.title = !p ? "" : hit ? `"${p.name}"에 ${hit.tag} 태그로 들어 있어요 (같은 태그로 누르면 빼기, 다른 태그를 고르고 누르면 태그 변경)` : `"${p.name}" 프리셋에 담기 (위에서 고른 태그로)`;
     }
     for (const b of preset.cardButtons) b.classList.toggle("bim-hidden-soft", !p);
+    window.BIM.setPresetMode(p ? p.name : null);
   }
 
   async function presetAdd(entries, mode, picker) {
@@ -203,7 +204,7 @@
     if (!p) return;
     const choice = picker.getChoice();
     if (!choice?.tag) {
-      toast("상품 이름 아래에서 저장할 태그를 먼저 고르세요", "warn");
+      toast("상품 이름 아래에서 저장할 태그를 먼저 고르세요 (프로젝트 칸은 '📁 프리셋')", "warn");
       picker.flash();
       return;
     }
@@ -340,9 +341,11 @@
     const cardPicker = picker({
       label: files.length > 1 ? `전부 Unity로 (${files.length})` : "",
       compact: true,
-      onChange: (choice) => {
+      onChange: (choice, project) => {
+        const isPreset = project === PRESET;
         for (const b of fileButtons) {
           b.classList.toggle("bim-off", !choice);
+          b.classList.toggle("bim-hidden-soft", isPreset); // 프리셋 모드에서는 ＋ 프리셋만
           b.title = !choice ? "위에서 프로젝트와 태그를 먼저 고르세요" : `${projectName(choice.project)} / ${choice.tag} 로 임포트`;
         }
       },
@@ -399,6 +402,10 @@
           event.preventDefault();
           event.stopPropagation();
           const choice = cardPicker.getChoice();
+          if (choice?.project === PRESET) {
+            toast("프리셋 모드에서는 ＋ 프리셋으로 담아요. 유니티로 보내려면 프로젝트를 고르세요", "warn");
+            return;
+          }
           if (!choice) {
             toast("상품 이름 아래에서 프로젝트와 태그를 먼저 고르세요", "warn");
             cardPicker.flash();
