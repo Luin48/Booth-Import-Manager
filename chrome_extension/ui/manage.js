@@ -170,11 +170,18 @@ $("extraAddBtn").addEventListener("click", async () => {
 });
 
 // ---- 인식된 프로젝트 ------------------------------------------------------------
+function newer(a, b) {
+  const pa = String(a).split(".").map(Number);
+  const pb = String(b).split(".").map(Number);
+  for (let i = 0; i < 3; i += 1) if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0);
+  return false;
+}
+
 function packageCell(p) {
   const latest = p.latestVersion || "";
   if (p.installed === "packages") {
     const cur = p.installedVersion || "";
-    const outdated = latest && cur && cur !== latest && !p.running;
+    const outdated = latest && cur && newer(latest, cur) && !p.running;
     return h("span", {
       class: `chip ${outdated ? "warn" : "ok"}`,
       title: outdated ? `새 버전 v${latest} — ALCOM에서 업데이트하세요` : "",

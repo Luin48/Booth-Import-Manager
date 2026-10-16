@@ -122,6 +122,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 async function bootData() {
+  // 처음 설치 직후처럼 프로젝트 목록이 비어 있으면, 켜진 유니티에게 한 번 물어보고 답한다
+  if (!(await core.listProjects({ includeHidden: false })).length) {
+    const alive = await core.liveUnities().catch(() => []);
+    if (alive.some((u) => !u.stale)) await core.scanProjects().catch(() => {});
+  }
   const [config, projects, prefs] = await Promise.all([
     core.getConfig(),
     core.listProjects({ includeHidden: false }),

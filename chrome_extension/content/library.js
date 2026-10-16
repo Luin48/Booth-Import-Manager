@@ -32,7 +32,7 @@
       itemName: title.trim(),
       shopName: (shop?.textContent || "").trim(),
       shopUrl: shop?.href || "",
-      thumbnail: card.querySelector("img")?.getAttribute("src") || "",
+      thumbnail: card.querySelector("img")?.src || "", // 절대 주소 (사이드패널에서도 보이게)
     };
   }
 
@@ -325,6 +325,11 @@
     const main = document.querySelector("main") || document.body;
     main.prepend(box);
   }
+
+  // 프로젝트 목록이 나중에 생기면 안내 배너를 치운다
+  document.addEventListener("bim-boot", (e) => {
+    if (e.detail?.projects?.length) document.getElementById("bim-banner")?.remove();
+  });
 
   async function init() {
     try {

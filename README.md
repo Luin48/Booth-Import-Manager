@@ -318,4 +318,4 @@ BOOTH에 로그인되어 있어야 합니다. 정리 중에는 BOOTH 탭이 잠�
 - 받은 에셋의 이용 약관은 각 상품의 약관을 따릅니다. 이 도구는 파일을 옮기고 임포트만 합니다.
 - 이미 유니티 프로젝트에 들어 있는 에셋 폴더를 다시 분류할 때는 [Unity Asset Classifier](https://github.com/Luin48/Unity-Asset-Classifier)를 추천합니다.
 
-직접 빌드하는 방법은 [docs/build.md](docs/build.md)에 있습니다.
+개인정보처리방침: [PRIVACY.md](PRIVACY.md) · 직접 빌드하는 방법: [docs/build.md](docs/build.md) · 웹스토어 등록 자료: [docs/chrome-web-store.md](docs/chrome-web-store.md)

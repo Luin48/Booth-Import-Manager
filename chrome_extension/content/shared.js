@@ -33,6 +33,7 @@
     return send("bootstrap").then((boot) => {
       state.boot = boot;
       for (const p of pickers) p.refill();
+      document.dispatchEvent(new CustomEvent("bim-boot", { detail: boot }));
       return boot;
     });
   }
@@ -79,6 +80,7 @@
       const sameSet = list.length === state.boot.projects.length && state.boot.projects.every((p) => byKey.has(p.key));
       state.boot.projects = list;
       for (const p of pickers) (sameSet ? p.updateLive : p.refill)();
+      if (!sameSet) document.dispatchEvent(new CustomEvent("bim-boot", { detail: state.boot }));
     } catch {
       for (const p of pickers) p.updateLive(true);
     }

@@ -1,4 +1,4 @@
-body { min-width: 300px; }
+body { min-width: 300px; overflow-x: hidden; }
 .sp-head {
   position: sticky;
   top: 0;
@@ -74,3 +74,5 @@ body { min-width: 300px; }
 .wish-item { display: grid; grid-template-columns: 36px 1fr auto; gap: 8px; align-items: center; padding: 6px 8px; border-radius: 6px; background: var(--panel); }
 .wish-item img { width: 36px; height: 36px; border-radius: 4px; object-fit: cover; }
 .confirm-box { padding: 10px; margin-bottom: 8px; border: 1px solid var(--danger); border-radius: 8px; background: var(--danger-bg); }
+.qfile .grow { min-width: 0; }
+.qfile .chip, .qfile .btn { flex: none; }

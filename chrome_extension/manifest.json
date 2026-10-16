@@ -2,7 +2,8 @@
   "manifest_version": 3,
   "name": "Booth Import Manager",
   "version": "1.0.0",
-  "description": "BOOTH 라이브러리에서 바로 Unity로 임포트하고, 받은 파일과 찜목록을 관리합니다.",
+  "description": "BOOTH에서 산 에셋을 클릭 한 번으로 Unity 프로젝트에 임포트하고 태그 폴더로 정리합니다. 찜목록 정리와 다크 테마 포함.",
+  "homepage_url": "https://github.com/Luin48/Booth-Import-Manager",
   "permissions": [
     "downloads",
     "storage",
@@ -28,6 +29,7 @@
   },
   "icons": {
     "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
     "48": "icons/icon48.png",
     "128": "icons/icon128.png"
   },
