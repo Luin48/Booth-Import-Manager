@@ -1,0 +1,25 @@
+name: Update release notes
+
+# 이미 있는 릴리즈의 본문만 docs/release-notes-v<버전>.md 로 다시 쓴다 (파일은 그대로).
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "버전 (예: 0.3.0)"
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Edit release body
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${{ inputs.version }}"
+          v="${v#v}"
+          gh release edit "v$v" --notes-file "docs/release-notes-v$v.md"
