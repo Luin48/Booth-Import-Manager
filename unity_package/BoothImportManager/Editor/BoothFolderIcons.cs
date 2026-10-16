@@ -116,6 +116,16 @@ namespace BoothImportManager
         /// <summary>모든 아이콘 정보 (복사본)</summary>
         public static List<Entry> All() => Map.Values.ToList();
 
+        /// <summary>아이콘 기록이 바뀌었는지 알기 위한 값 (FolderIcons.json 수정 시각). 어느 스레드에서나 호출 가능</summary>
+        public static long Stamp
+        {
+            get
+            {
+                try { return File.Exists(MapFile) ? File.GetLastWriteTimeUtc(MapFile).Ticks : 0; }
+                catch { return 0; }
+            }
+        }
+
         /// <summary>다른 도구가 FolderIcons.json 을 고쳤을 때 다시 읽기</summary>
         public static void Reload()
         {
