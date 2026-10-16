@@ -799,10 +799,201 @@ $("vpmCopyBtn").addEventListener("click", async () => {
 });
 $("reloadExtBtn").addEventListener("click", () => chrome.runtime.reload());
 
+// ---- 에셋 프리셋 --------------------------------------------------------------
+const presetState = { presets: [], changes: {}, armed: null };
+const itemPageUrl = (id) => `https://booth.pm/${/^ja/.test(navigator.language) ? "ja" : /^ko/.test(navigator.language) ? "ko" : "en"}/items/${id}`;
+
+async function loadPresets() {
+  try {
+    const res = await localApi("/api/presets");
+    presetState.presets = res.presets || [];
+    presetState.changes = res.changes || {};
+    renderPresets();
+  } catch (error) {
+    fail(error);
+  }
+}
+
+async function savePresets(msg = "저장됨") {
+  try {
+    presetState.presets = await localApi("/api/presets/save", { method: "POST", body: { presets: presetState.presets } });
+    saved(msg);
+    await loadPresets();
+  } catch (error) {
+    fail(error);
+  }
+}
+
+function changeText(c) {
+  const bits = [];
+  if (c.added.length) bits.push(`새 파일: ${c.added.map((f) => f.label || f.id).join(", ")}`);
+  if (c.removed.length) bits.push(`사라진 파일: ${c.removed.map((f) => f.label || f.id).join(", ")}`);
+  return bits.join(" · ");
+}
+
+function renderPresets() {
+  const tags = (state.config?.tags || []).map((t) => t.name);
+  const projects = state.projects.filter((p) => !p.hidden);
+  const list = presetState.presets;
+  if (!list.length) {
+    $("presetList").replaceChildren(h("div", { class: "card block muted", text: "아직 프리셋이 없어요. 위에서 만들거나, BOOTH 라이브러리의 BIM 줄에서 만들 수 있어요." }));
+    return;
+  }
+  $("presetList").replaceChildren(
+    ...list.map((preset) => {
+      const changed = preset.items.filter((e) => presetState.changes[`${preset.id}:${e.downloadableId}`]);
+      const target = h("select", { "aria-label": "보낼 프로젝트" }, h("option", { value: "", text: "프로젝트 선택…" }), projects.map((p) => h("option", { value: p.key, text: `${p.running ? "● " : ""}${p.name}` })));
+      const sendBtn = h("button", {
+        class: "btn primary",
+        text: `한번에 보내기 (${preset.items.length})`,
+        disabled: !preset.items.length,
+        onclick: async () => {
+          if (!target.value) return fail(new Error("보낼 프로젝트를 고르세요"));
+          sendBtn.disabled = true;
+          sendBtn.textContent = "보내는 중…";
+          try {
+            const res = await localApi("/api/presets/send", { method: "POST", body: { presetId: preset.id, project: target.value } });
+            const name = projects.find((p) => p.key === target.value)?.name || "";
+            saved(res.failed.length ? `${res.sent}개 보냄, ${res.failed.length}개 실패 (${res.failed[0].error})` : `${name}(으)로 ${res.sent}개 보냄 — 사이드패널 대기열에서 확인할 수 있어요`);
+          } catch (error) {
+            fail(error);
+          } finally {
+            sendBtn.disabled = false;
+            sendBtn.textContent = `한번에 보내기 (${preset.items.length})`;
+          }
+        },
+      });
+      const del = h("button", {
+        class: "btn small danger",
+        text: presetState.armed === preset.id ? "정말 삭제?" : "삭제",
+        onclick: () => {
+          if (presetState.armed !== preset.id) {
+            presetState.armed = preset.id;
+            renderPresets();
+            setTimeout(() => {
+              if (presetState.armed === preset.id) {
+                presetState.armed = null;
+                renderPresets();
+              }
+            }, 3000);
+            return;
+          }
+          presetState.armed = null;
+          presetState.presets = presetState.presets.filter((x) => x.id !== preset.id);
+          savePresets("프리셋 삭제됨");
+        },
+      });
+      const rows = preset.items.map((e) => {
+        const c = presetState.changes[`${preset.id}:${e.downloadableId}`];
+        const tagSel = h("select", { class: "preset-tag", "aria-label": "저장 태그", onchange: (ev) => { e.tag = ev.target.value; savePresets(); } },
+          [...new Set([...tags, e.tag])].map((t) => h("option", { value: t, text: t })));
+        tagSel.value = e.tag;
+        return h(
+          "div",
+          { class: `preset-item${c ? " changed" : ""}` },
+          e.thumbnail ? h("img", { src: e.thumbnail, alt: "", loading: "lazy" }) : h("div", { class: "noimg" }),
+          h(
+            "div",
+            { class: "grow preset-info" },
+            h("div", { class: "preset-title", text: e.itemName || e.fileLabel }),
+            h("div", { class: "muted small-text", text: `${e.fileLabel}${e.shopName ? ` · ${e.shopName}` : ""}` }),
+            c
+              ? h(
+                  "div",
+                  { class: "preset-change" },
+                  h("span", { class: "chip warn", text: c.missing ? "⚠ 담은 파일이 없어졌어요" : "⚠ 다운로드 항목 바뀜" }),
+                  h("span", { class: "small-text", text: changeText(c) }),
+                  h("button", {
+                    class: "btn small",
+                    title: "바뀐 목록을 확인했어요 (표시 지우기)",
+                    text: "확인함",
+                    onclick: async () => {
+                      await localApi("/api/presets/ack", { method: "POST", body: { presetId: preset.id, itemId: e.itemId } }).catch(fail);
+                      loadPresets();
+                    },
+                  }),
+                )
+              : null,
+          ),
+          tagSel,
+          e.itemId ? h("a", { class: "btn small", href: itemPageUrl(e.itemId), target: "_blank", rel: "noopener", title: "BOOTH 상품 페이지 열기", text: "상품 페이지 ↗" }) : null,
+          h("button", {
+            class: "btn small",
+            title: "프리셋에서 빼기",
+            text: "✕",
+            onclick: () => {
+              preset.items = preset.items.filter((x) => x !== e);
+              savePresets("빠짐");
+            },
+          }),
+        );
+      });
+      return h(
+        "div",
+        { class: "card block preset-card" },
+        h(
+          "div",
+          { class: "row wrap preset-head" },
+          h("input", {
+            type: "text",
+            class: "preset-name",
+            value: preset.name,
+            "aria-label": "프리셋 이름",
+            onchange: (ev) => {
+              const name = ev.target.value.trim();
+              if (!name) return (ev.target.value = preset.name);
+              preset.name = name;
+              savePresets("이름 바뀜");
+            },
+          }),
+          h("span", { class: "chip", text: `${preset.items.length}개` }),
+          changed.length ? h("span", { class: "chip warn", text: `업데이트 ${changed.length}` }) : null,
+          h("span", { class: "grow" }),
+          target,
+          sendBtn,
+          del,
+        ),
+        rows.length ? h("div", { class: "stack" }, rows) : h("div", { class: "muted", text: "비어 있어요. BOOTH 라이브러리에서 ＋ 프리셋으로 담으세요." }),
+      );
+    }),
+  );
+}
+
+$("addPresetBtn").addEventListener("click", async () => {
+  try {
+    await localApi("/api/presets/create", { method: "POST", body: { name: $("newPresetName").value } });
+    $("newPresetName").value = "";
+    saved("프리셋 만들었어요");
+    loadPresets();
+  } catch (error) {
+    fail(error);
+  }
+});
+$("newPresetName").addEventListener("keydown", (e) => e.key === "Enter" && $("addPresetBtn").click());
+$("presetCheckBtn").addEventListener("click", async () => {
+  $("presetCheckBtn").disabled = true;
+  $("presetCheckInfo").textContent = "BOOTH 라이브러리를 읽는 중… (상품 수에 따라 조금 걸려요)";
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "presetCheck" });
+    if (!res?.ok) throw new Error(res?.error || "확인 실패");
+    $("presetCheckInfo").textContent = `라이브러리 상품 ${res.data.items}개 확인함 (${new Date().toLocaleTimeString()})`;
+    loadPresets();
+  } catch (error) {
+    $("presetCheckInfo").textContent = "";
+    fail(error);
+  } finally {
+    $("presetCheckBtn").disabled = false;
+  }
+});
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.presetsVersion && !$("tab-presets").classList.contains("hidden")) loadPresets();
+});
+
 // ---- 탭 ---------------------------------------------------------------------
 function showTab(name) {
   document.querySelectorAll(".m-tabs button").forEach((b) => b.classList.toggle("active", b.dataset.tab === name));
-  for (const t of ["projects", "tags", "assign", "settings"]) $(`tab-${t}`).classList.toggle("hidden", t !== name);
+  for (const t of ["projects", "tags", "assign", "presets", "settings"]) $(`tab-${t}`).classList.toggle("hidden", t !== name);
+  if (name === "presets") loadPresets();
   history.replaceState(null, "", `#${name}`);
 }
 document.querySelectorAll(".m-tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));

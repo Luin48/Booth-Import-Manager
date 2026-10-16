@@ -1,5 +1,5 @@
 import * as core from "./lib/core.js";
-import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageFetchItems, slimItem } from "./lib/booth.js";
+import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageCollectLibraryFiles, pageFetchItems, slimItem } from "./lib/booth.js";
 
 // ---- 사이드패널: 부스 페이지에서만 ---------------------------------------------
 const isBoothTab = (url) => /^https:\/\/([\w-]+\.)?booth\.pm(\/|$)/.test(url || "");
@@ -42,6 +42,8 @@ function setBadge(text) {
   chrome.action.setBadgeText({ text }).catch(() => {});
   if (text) setTimeout(() => chrome.action.setBadgeText({ text: "" }).catch(() => {}), 6000);
 }
+
+core.setNotify((msg) => broadcast(msg));
 
 function broadcast(message) {
   chrome.runtime.sendMessage(message).catch(() => {});
@@ -174,6 +176,13 @@ async function handle(msg, sender) {
       return wishlistScan((text) => chrome.runtime.sendMessage({ type: "wishlist-progress", text }).catch(() => {}));
     case "wishlistApply":
       return wishlistApply(msg.plan);
+    case "presetCheck": {
+      // 라이브러리 전체를 훑어 프리셋 상품의 다운로드 목록이 바뀌었는지 확인
+      const items = await withBoothTab("https://accounts.booth.pm", "/library", pageCollectLibraryFiles, [100]);
+      if (!items || typeof items !== "object") throw new Error("라이브러리를 읽지 못했어요. BOOTH에 로그인되어 있는지 확인해 주세요.");
+      await core.recordItemFiles(items);
+      return { items: Object.keys(items).length };
+    }
     case "openManage":
       await chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") + (msg.hash || "") });
       return true;

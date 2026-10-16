@@ -614,6 +614,135 @@ export async function boothStatus({ itemIds = [], downloadableIds = [] }) {
   return out;
 }
 
+// ---- 에셋 프리셋 ---------------------------------------------------------------
+// 라이브러리에서 "받을 파일 + 저장 태그"만 모아 두었다가, 나중에 고른 프로젝트로 한 번에 보낸다.
+const PRESETS_KEY = "bimPresets";
+const ITEMFILES_KEY = "bimItemFiles"; // itemId -> { files: [{id, label}], seenAt } (라이브러리에서 본 최신 다운로드 목록)
+
+export async function getItemFiles() {
+  return (await chrome.storage.local.get(ITEMFILES_KEY))[ITEMFILES_KEY] || {};
+}
+
+/** 라이브러리에서 본 상품별 다운로드 목록 기록 (프리셋 업데이트 표시용) */
+export async function recordItemFiles(items) {
+  const map = await getItemFiles();
+  let changed = false;
+  for (const [itemId, files] of Object.entries(items || {})) {
+    if (!itemId || !Array.isArray(files) || !files.length) continue;
+    const prev = map[itemId];
+    const same = prev && prev.files.length === files.length && prev.files.every((f) => files.some((x) => x.id === f.id));
+    map[itemId] = { files: files.map((f) => ({ id: String(f.id), label: String(f.label || "") })), seenAt: now() };
+    if (!same) changed = true;
+  }
+  await chrome.storage.local.set({ [ITEMFILES_KEY]: map, ...(changed ? { presetsVersion: Date.now() } : {}) });
+  return changed;
+}
+
+/** 프리셋 항목의 상품 파일 목록이 담을 때와 달라졌는지 */
+export function presetChanges(entry, itemFiles) {
+  const cur = itemFiles[entry.itemId];
+  if (!cur || !Array.isArray(entry.itemFiles) || !entry.itemFiles.length) return null;
+  const was = new Set(entry.itemFiles.map((f) => f.id));
+  const now_ = new Set(cur.files.map((f) => f.id));
+  const added = cur.files.filter((f) => !was.has(f.id));
+  const removed = entry.itemFiles.filter((f) => !now_.has(f.id));
+  if (!added.length && !removed.length) return null;
+  return { added, removed, missing: !now_.has(entry.downloadableId) };
+}
+
+export async function getPresets() {
+  return (await chrome.storage.local.get(PRESETS_KEY))[PRESETS_KEY] || [];
+}
+
+async function setPresets(list) {
+  await chrome.storage.local.set({ [PRESETS_KEY]: list, presetsVersion: Date.now() });
+  return list;
+}
+
+function presetEntry(e) {
+  const downloadableId = String(e.downloadableId || (String(e.url || "").match(/downloadables\/(\d+)/) || [])[1] || "");
+  return {
+    downloadableId,
+    url: e.url || (downloadableId ? `https://booth.pm/downloadables/${downloadableId}` : ""),
+    fileLabel: e.fileLabel || "",
+    tag: e.tag || UNTAGGED,
+    itemId: String(e.itemId || ""),
+    itemName: e.itemName || "",
+    shopName: e.shopName || "",
+    shopUrl: e.shopUrl || "",
+    thumbnail: e.thumbnail || "",
+    itemFiles: Array.isArray(e.itemFiles) ? e.itemFiles.map((f) => ({ id: String(f.id), label: String(f.label || "") })) : [],
+    addedAt: e.addedAt || now(),
+  };
+}
+
+export async function createPreset(name) {
+  name = String(name || "").trim();
+  if (!name) throw new Error("프리셋 이름을 입력하세요");
+  const list = await getPresets();
+  if (list.some((p) => p.name === name)) throw new Error("같은 이름의 프리셋이 있어요");
+  const preset = { id: uid(), name, items: [], createdAt: now() };
+  await setPresets([...list, preset]);
+  return preset;
+}
+
+/** 파일을 프리셋에 넣거나(태그 갱신) 빼기. mode: "toggle" | "add" | "remove" */
+export async function presetEdit(presetId, entries, mode = "toggle") {
+  const list = await getPresets();
+  const preset = list.find((p) => p.id === presetId);
+  if (!preset) throw new Error("프리셋을 찾을 수 없어요");
+  for (const raw of entries || []) {
+    const e = presetEntry(raw);
+    if (!e.downloadableId) continue;
+    const i = preset.items.findIndex((x) => x.downloadableId === e.downloadableId);
+    const remove = mode === "remove" || (mode === "toggle" && i >= 0 && preset.items[i].tag === e.tag);
+    if (remove) {
+      if (i >= 0) preset.items.splice(i, 1);
+    } else if (i >= 0) {
+      preset.items[i] = { ...preset.items[i], ...e, addedAt: preset.items[i].addedAt };
+    } else {
+      preset.items.push(e);
+    }
+  }
+  preset.updatedAt = now();
+  await setPresets(list);
+  return preset;
+}
+
+/** 프리셋의 파일을 지정한 프로젝트로 한 번에 보내기 */
+export async function sendPreset(presetId, project, onlyIds, notify) {
+  if (!project) throw new Error("보낼 프로젝트를 고르세요");
+  const preset = (await getPresets()).find((p) => p.id === presetId);
+  if (!preset) throw new Error("프리셋을 찾을 수 없어요");
+  const items = preset.items.filter((e) => !onlyIds?.length || onlyIds.includes(e.downloadableId));
+  const results = [];
+  for (const e of items) {
+    try {
+      const res = await startJob(
+        {
+          url: e.url,
+          project,
+          tag: e.tag,
+          preferLocal: true,
+          booth: { downloadableId: e.downloadableId, itemId: e.itemId, itemName: e.itemName, shopName: e.shopName, shopUrl: e.shopUrl, thumbnail: e.thumbnail, fileLabel: e.fileLabel },
+        },
+        notify,
+      );
+      results.push({ downloadableId: e.downloadableId, mode: res.mode });
+    } catch (error) {
+      results.push({ downloadableId: e.downloadableId, error: error.message });
+    }
+    await new Promise((r) => setTimeout(r, 400)); // 부스에 한꺼번에 몰리지 않게
+  }
+  return { sent: results.filter((r) => !r.error).length, failed: results.filter((r) => r.error), total: items.length };
+}
+
+// 서비스워커가 알려줄 곳 (background 에서 지정)
+let notifyHook = null;
+export function setNotify(fn) {
+  notifyHook = fn;
+}
+
 // ---- 관리 페이지·사이드패널용 (예전 로컬 앱 주소 흉내) ---------------------------------------
 export async function route(path, method = "GET", body = {}) {
   const [p, query = ""] = path.split("?");
@@ -682,6 +811,43 @@ export async function route(path, method = "GET", body = {}) {
       return hideJobs(body.jobIds || [], body.hidden !== false);
     case "POST /api/jobs/remove":
       return removeJobs(body.jobIds || []);
+    case "GET /api/presets": {
+      const { activePreset } = await chrome.storage.local.get("activePreset");
+      const [presets, itemFiles] = await Promise.all([getPresets(), getItemFiles()]);
+      const changes = {};
+      for (const p of presets) for (const e of p.items) {
+        const c = presetChanges(e, itemFiles);
+        if (c) changes[`${p.id}:${e.downloadableId}`] = c;
+      }
+      return { presets, active: activePreset || "", changes };
+    }
+    case "POST /api/items/seen":
+      return recordItemFiles(body.items);
+    case "POST /api/presets/ack": {
+      // 바뀐 다운로드 목록을 확인함 → 지금 목록을 기준으로
+      const [list, itemFiles] = await Promise.all([getPresets(), getItemFiles()]);
+      for (const p of list) {
+        if (body.presetId && p.id !== body.presetId) continue;
+        for (const e of p.items) if (e.itemId === body.itemId && itemFiles[e.itemId]) e.itemFiles = itemFiles[e.itemId].files;
+      }
+      await setPresets(list);
+      return true;
+    }
+    case "POST /api/presets/create":
+      return createPreset(body.name);
+    case "POST /api/presets/edit":
+      return presetEdit(body.presetId, body.entries, body.mode);
+    case "POST /api/presets/save": {
+      // 관리 페이지에서 이름·태그·순서를 고친 전체 목록
+      const list = (body.presets || []).map((p) => ({ id: p.id || uid(), name: String(p.name || "").trim() || "이름 없음", createdAt: p.createdAt || now(), updatedAt: now(), items: (p.items || []).map(presetEntry) }));
+      await setPresets(list);
+      return list;
+    }
+    case "POST /api/presets/active":
+      await chrome.storage.local.set({ activePreset: body.presetId || "" });
+      return true;
+    case "POST /api/presets/send":
+      return sendPreset(body.presetId, body.project, body.only, notifyHook);
     default:
       throw new Error(`알 수 없는 요청: ${method} ${p}`);
   }

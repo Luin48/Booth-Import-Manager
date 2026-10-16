@@ -62,6 +62,7 @@ async function load() {
   renderTarget();
   renderFiles();
   if (!$("tab-queue").classList.contains("hidden")) renderQueue();
+  if (!$("tab-presets").classList.contains("hidden")) renderPresets();
 }
 
 // ---- 1. 프로젝트 / 2. 태그 ---------------------------------------------------
@@ -103,6 +104,7 @@ $("projectSel").addEventListener("change", (e) => {
   state.tag = "";
   renderTarget();
   remember();
+  if (!$("tab-presets").classList.contains("hidden")) renderPresets();
 });
 $("tagSel").addEventListener("change", (e) => {
   state.tag = e.target.value;
@@ -267,6 +269,72 @@ function renderQueue() {
   list.replaceChildren(...(blocks.length ? blocks : [h("div", { class: "empty", text: "대기 중인 임포트가 없어요" })]));
 }
 
+// ---- 에셋 프리셋 ---------------------------------------------------------------
+const presetUi = { presets: [], changes: {}, selected: "" };
+const itemPageUrl = (id) => `https://booth.pm/${/^ja/.test(navigator.language) ? "ja" : /^ko/.test(navigator.language) ? "ko" : "en"}/items/${id}`;
+
+async function loadPresets() {
+  const res = await localApi("/api/presets").catch(() => ({ presets: [], changes: {} }));
+  presetUi.presets = res.presets || [];
+  presetUi.changes = res.changes || {};
+  if (!presetUi.presets.some((p) => p.id === presetUi.selected)) presetUi.selected = res.active || presetUi.presets[0]?.id || "";
+  renderPresets();
+}
+
+function renderPresets() {
+  const sel = $("presetSel");
+  sel.replaceChildren(
+    ...(presetUi.presets.length
+      ? presetUi.presets.map((p) => {
+          const n = p.items.filter((e) => presetUi.changes[`${p.id}:${e.downloadableId}`]).length;
+          return h("option", { value: p.id, text: `${p.name} (${p.items.length})${n ? ` · 업데이트 ${n}` : ""}` });
+        })
+      : [h("option", { value: "", text: "프리셋 없음" })]),
+  );
+  sel.value = presetUi.selected;
+  const preset = presetUi.presets.find((p) => p.id === presetUi.selected);
+  const items = preset?.items || [];
+  $("presetItems").replaceChildren(
+    ...(items.length
+      ? items.map((e) => {
+          const c = presetUi.changes[`${preset.id}:${e.downloadableId}`];
+          return h(
+            "div",
+            { class: `file${c ? " changed" : ""}` },
+            e.thumbnail ? h("img", { src: e.thumbnail, alt: "", loading: "lazy" }) : h("div", { class: "noimg" }),
+            h(
+              "div",
+              { class: "grow" },
+              h("div", { class: "title", text: e.itemName || e.fileLabel }),
+              h("div", { class: "sub", text: `${e.fileLabel} → ${e.tag}` }),
+              c ? h("div", { class: "chips" }, h("span", { class: "chip failed", title: [...c.added.map((f) => `+ ${f.label}`), ...c.removed.map((f) => `- ${f.label}`)].join("\n"), text: c.missing ? "담은 파일이 없어졌어요" : "다운로드 항목 바뀜" })) : null,
+            ),
+            e.itemId ? h("a", { class: "btn small", href: itemPageUrl(e.itemId), target: "_blank", rel: "noopener", title: "상품 페이지 열기", text: "↗" }) : null,
+          );
+        })
+      : [h("div", { class: "empty", text: preset ? "비어 있어요. 라이브러리에서 ＋ 프리셋으로 담으세요." : "라이브러리 맨 위 BIM 줄에서 프리셋을 만들 수 있어요." })]),
+  );
+  const p = state.projects.find((x) => x.key === state.project);
+  $("presetSendBtn").disabled = !items.length || !p;
+  $("presetSendBtn").textContent = !p ? "1번에서 보낼 프로젝트를 고르세요" : `${p.name}(으)로 ${items.length}개 한번에 보내기`;
+}
+
+$("presetSel").addEventListener("change", (e) => {
+  presetUi.selected = e.target.value;
+  renderPresets();
+});
+$("presetManageBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("manage.html#presets") }));
+$("presetSendBtn").addEventListener("click", async () => {
+  $("presetSendBtn").disabled = true;
+  try {
+    const res = await localApi("/api/presets/send", { method: "POST", body: { presetId: presetUi.selected, project: state.project } });
+    flash(res.failed.length ? `${res.sent}개 보냄, ${res.failed.length}개 실패` : `${res.sent}개 보냄 — 대기열 탭에서 확인`);
+  } catch (error) {
+    flash(error.message);
+  }
+  load();
+});
+
 // ---- 찜 정리 ----------------------------------------------------------------
 function wishRules() {
   const rules = {};
@@ -406,8 +474,9 @@ chrome.runtime.onMessage.addListener((msg) => {
 document.querySelectorAll(".tabs button").forEach((btn) =>
   btn.addEventListener("click", () => {
     document.querySelectorAll(".tabs button").forEach((b) => b.classList.toggle("active", b === btn));
-    for (const t of ["files", "queue", "wish"]) $(`tab-${t}`).classList.toggle("hidden", t !== btn.dataset.tab);
+    for (const t of ["files", "queue", "presets", "wish"]) $(`tab-${t}`).classList.toggle("hidden", t !== btn.dataset.tab);
     if (btn.dataset.tab === "queue") renderQueue();
+    if (btn.dataset.tab === "presets") loadPresets();
   }),
 );
 $("refreshBtn").addEventListener("click", load);
@@ -427,6 +496,7 @@ $("retryBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.r
 $("manageBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") }));
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.configVersion) load();
+  if (area === "local" && changes.presetsVersion && !$("tab-presets").classList.contains("hidden")) loadPresets();
 });
 
 loadWishRules();

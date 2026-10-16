@@ -153,31 +153,140 @@
   }
 
   // 라이브러리 상단: 다운로드 항목 전체 펼치기/접기 + 기본값 기억
-  function libraryBar(firstCard) {
-    if (!isLibrary || !firstCard || document.getElementById("bim-libbar")) return;
-    const remember = el("input", { type: "checkbox", checked: collapseByDefault });
-    remember.checked = collapseByDefault;
-    remember.addEventListener("change", () => chrome.storage.local.set({ libraryCollapsed: remember.checked }));
-    const sizeSel = el("select", { class: "bim-select bim-pagesize", title: "한 페이지에 보여줄 상품 수" }, PAGE_SIZES.map((n) => el("option", { value: String(n), text: `${n}개` })));
-    sizeSel.value = String(pageSize);
-    sizeSel.addEventListener("change", async () => {
-      const n = Number(sizeSel.value);
-      await chrome.storage.local.set({ libraryPageSize: n });
-      // 지금 보고 있는 첫 상품이 들어있는 묶음으로 이동
-      const first = pageParam(location.href);
-      location.href = pageUrl(Math.floor((first - 1) / (n / 10)) * (n / 10) + 1);
+  // ---- 에셋 프리셋: 받을 파일 + 저장 태그만 모아 두기 ----
+  const preset = { list: [], active: "", rows: [], cardButtons: [] };
+  const seenItems = {}; // 라이브러리에서 본 상품별 다운로드 목록 → 프리셋 업데이트 표시용
+  function flushSeen() {
+    const items = { ...seenItems };
+    for (const k of Object.keys(seenItems)) delete seenItems[k];
+    if (Object.keys(items).length) api("/api/items/seen", { items }).catch(() => {});
+  }
+  const api = (path, body) => send("api", { path, method: body === undefined ? "GET" : "POST", body });
+
+  async function loadPresets() {
+    try {
+      const res = await api("/api/presets");
+      preset.list = res.presets || [];
+      preset.active = preset.list.some((p) => p.id === res.active) ? res.active : "";
+    } catch {
+      preset.list = [];
+    }
+    renderPresetUi();
+  }
+
+  const activePreset = () => preset.list.find((p) => p.id === preset.active) || null;
+
+  function renderPresetUi() {
+    const sel = document.getElementById("bim-preset-select");
+    if (sel) {
+      sel.replaceChildren(
+        el("option", { value: "", text: "담기 끔" }),
+        ...preset.list.map((p) => el("option", { value: p.id, text: `${p.name} (${p.items.length})` })),
+        el("option", { value: "__new__", text: "＋ 새 프리셋…" }),
+      );
+      sel.value = preset.active;
+    }
+    const p = activePreset();
+    const inPreset = new Map((p?.items || []).map((x) => [x.downloadableId, x]));
+    for (const r of preset.rows) {
+      r.btn.classList.toggle("bim-hidden-soft", !p);
+      const hit = inPreset.get(r.file.downloadableId);
+      r.btn.classList.toggle("bim-in-preset", Boolean(hit));
+      r.btn.textContent = hit ? `✓ ${hit.tag}` : "＋ 프리셋";
+      r.btn.title = !p ? "" : hit ? `"${p.name}"에 ${hit.tag} 태그로 들어 있어요 (같은 태그로 누르면 빼기, 다른 태그를 고르고 누르면 태그 변경)` : `"${p.name}" 프리셋에 담기 (위에서 고른 태그로)`;
+    }
+    for (const b of preset.cardButtons) b.classList.toggle("bim-hidden-soft", !p);
+  }
+
+  async function presetAdd(entries, mode, picker) {
+    const p = activePreset();
+    if (!p) return;
+    const choice = picker.getChoice();
+    if (!choice?.tag) {
+      toast("상품 이름 아래에서 저장할 태그를 먼저 고르세요", "warn");
+      picker.flash();
+      return;
+    }
+    try {
+      const updated = await api("/api/presets/edit", { presetId: p.id, mode, entries: entries.map((e) => ({ ...e, tag: choice.tag })) });
+      preset.list = preset.list.map((x) => (x.id === updated.id ? updated : x));
+      renderPresetUi();
+    } catch (error) {
+      toast(error.message, "error");
+    }
+  }
+
+  function presetControl() {
+    const sel = el("select", { id: "bim-preset-select", class: "bim-select", title: "고른 프리셋에 파일과 태그를 담아 둬요" });
+    const name = el("input", { type: "text", class: "bim-input bim-hidden-soft", placeholder: "새 프리셋 이름" });
+    const make = el("button", { class: "bim-toggle bim-hidden-soft", type: "button", text: "만들기" });
+    const showNew = (on) => {
+      name.classList.toggle("bim-hidden-soft", !on);
+      make.classList.toggle("bim-hidden-soft", !on);
+      if (on) name.focus();
+    };
+    sel.addEventListener("change", async () => {
+      if (sel.value === "__new__") {
+        sel.value = preset.active;
+        showNew(true);
+        return;
+      }
+      preset.active = sel.value;
+      showNew(false);
+      await api("/api/presets/active", { presetId: preset.active }).catch(() => {});
+      renderPresetUi();
     });
-    const bar = el(
-      "div",
-      { id: "bim-libbar", class: "bim-libbar" },
-      el("span", { class: "bim-logo", text: "BIM" }),
-      el("span", { class: "bim-libbar-label", text: "다운로드 항목" }),
-      el("button", { class: "bim-toggle", type: "button", text: "▾ 모두 펼치기", onclick: () => collapsers.forEach((f) => f(true)) }),
-      el("button", { class: "bim-toggle", type: "button", text: "▸ 모두 접기", onclick: () => collapsers.forEach((f) => f(false)) }),
-      el("label", { class: "bim-libbar-check" }, remember, el("span", { text: "처음에 접어두기" })),
-      el("label", { class: "bim-libbar-size" }, el("span", { text: "페이지당" }), sizeSel),
-    );
+    const create = async () => {
+      try {
+        const p = await api("/api/presets/create", { name: name.value });
+        preset.list.push(p);
+        preset.active = p.id;
+        await api("/api/presets/active", { presetId: p.id });
+        name.value = "";
+        showNew(false);
+        renderPresetUi();
+        toast(`프리셋 "${p.name}" 만들었어요 — 파일 옆 ＋ 프리셋으로 담으세요`, "ok");
+      } catch (error) {
+        toast(error.message, "error");
+      }
+    };
+    make.addEventListener("click", create);
+    name.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") create();
+      if (e.key === "Escape") showNew(false);
+    });
+    return el("span", { class: "bim-libbar-preset" }, el("span", { class: "bim-libbar-label", text: "에셋 프리셋" }), sel, name, make);
+  }
+
+  // 맨 위 BIM 줄: (라이브러리) 다운로드 항목 펼치기/접기·페이지당 + (공통) 에셋 프리셋 담기
+  function libraryBar(firstCard) {
+    if (!firstCard || document.getElementById("bim-libbar")) return;
+    const parts = [el("span", { class: "bim-logo", text: "BIM" })];
+    if (isLibrary) {
+      const remember = el("input", { type: "checkbox", checked: collapseByDefault });
+      remember.checked = collapseByDefault;
+      remember.addEventListener("change", () => chrome.storage.local.set({ libraryCollapsed: remember.checked }));
+      const sizeSel = el("select", { class: "bim-select bim-pagesize", title: "한 페이지에 보여줄 상품 수" }, PAGE_SIZES.map((n) => el("option", { value: String(n), text: `${n}개` })));
+      sizeSel.value = String(pageSize);
+      sizeSel.addEventListener("change", async () => {
+        const n = Number(sizeSel.value);
+        await chrome.storage.local.set({ libraryPageSize: n });
+        // 지금 보고 있는 첫 상품이 들어있는 묶음으로 이동
+        const first = pageParam(location.href);
+        location.href = pageUrl(Math.floor((first - 1) / (n / 10)) * (n / 10) + 1);
+      });
+      parts.push(
+        el("span", { class: "bim-libbar-label", text: "다운로드 항목" }),
+        el("button", { class: "bim-toggle", type: "button", text: "▾ 모두 펼치기", onclick: () => collapsers.forEach((f) => f(true)) }),
+        el("button", { class: "bim-toggle", type: "button", text: "▸ 모두 접기", onclick: () => collapsers.forEach((f) => f(false)) }),
+        el("label", { class: "bim-libbar-check" }, remember, el("span", { text: "처음에 접어두기" })),
+        el("label", { class: "bim-libbar-size" }, el("span", { text: "페이지당" }), sizeSel),
+      );
+    }
+    const bar = el("div", { id: "bim-libbar", class: "bim-libbar" }, ...parts);
+    bar.append(el("div", { class: "bim-libbar-row" }, presetControl()));
     firstCard.before(bar);
+    renderPresetUi();
   }
 
   const registry = []; // { downloadableId, statusSlot, card }
@@ -260,7 +369,21 @@
     });
     collapsers.push(setOpen);
     setOpen(!collapseByDefault);
-    const bar = el("div", { class: "bim-cardbar" }, el("span", { class: "bim-logo", text: "BIM" }), filesBox ? toggle : null, cardSlot, cardPicker);
+    const itemFiles = files.map((f) => ({ id: f.downloadableId, label: f.fileLabel }));
+    if (isLibrary && info.itemId) seenItems[info.itemId] = itemFiles;
+    const fileEntries = () => files.map((f) => ({ ...info, downloadableId: f.downloadableId, url: f.url, fileLabel: f.fileLabel, itemFiles }));
+    const allToPreset = el("button", {
+      class: "bim-toggle bim-preset-all bim-hidden-soft",
+      type: "button",
+      title: "이 상품의 파일을 전부 프리셋에 담기 (고른 태그로)",
+      text: "＋ 전부 프리셋",
+      onclick: (e) => {
+        e.preventDefault();
+        presetAdd(fileEntries(), "add", cardPicker);
+      },
+    });
+    preset.cardButtons.push(allToPreset);
+    const bar = el("div", { class: "bim-cardbar" }, el("span", { class: "bim-logo", text: "BIM" }), filesBox ? toggle : null, cardSlot, allToPreset, cardPicker);
     if (list) list.before(bar);
     else card.firstElementChild?.after(bar);
 
@@ -292,10 +415,21 @@
         },
       });
       fileButtons.push(btn);
+      const presetBtn = el("button", {
+        class: "bim-preset-btn bim-hidden-soft",
+        type: "button",
+        text: "＋ 프리셋",
+        onclick: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          presetAdd([{ ...info, downloadableId: file.downloadableId, url: file.url, fileLabel: file.fileLabel, itemFiles: files.map((f) => ({ id: f.downloadableId, label: f.fileLabel })) }], "toggle", cardPicker);
+        },
+      });
+      preset.rows.push({ file, btn: presetBtn });
       // Download 버튼을 감싼 칸이 가로 줄(flex) 안에 있으면 그 칸 앞에, 아니면 버튼 바로 앞에
       const wrap = file.btn.parentElement;
       const anchor = wrap && wrap.parentElement && getComputedStyle(wrap.parentElement).display.includes("flex") ? wrap : file.btn;
-      anchor.before(el("span", { class: "bim-inline" }, statusSlot, btn));
+      anchor.before(el("span", { class: "bim-inline" }, statusSlot, presetBtn, btn));
       // 부스 기본 Download 버튼을 눌러도 상품 정보는 남긴다 (태그 없이 보관 폴더로)
       file.btn.addEventListener(
         "click",
@@ -326,6 +460,10 @@
     main.prepend(box);
   }
 
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && (changes.presetsVersion || changes.activePreset)) loadPresets();
+  });
+
   // 프로젝트 목록이 나중에 생기면 안내 배너를 치운다
   document.addEventListener("bim-boot", (e) => {
     if (e.detail?.projects?.length) document.getElementById("bim-banner")?.remove();
@@ -350,10 +488,13 @@
     }
     libraryBar(cards[0]);
     cards.forEach(decorate);
+    flushSeen();
+    loadPresets();
     refreshStatus();
     const more = await expandPage(cards[0]);
     if (Array.isArray(more) && more.length) {
       findCards().forEach(decorate);
+      flushSeen();
       refreshStatus();
     }
   }

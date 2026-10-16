@@ -265,3 +265,15 @@ html.bim-dark .bim-select option { background: var(--bim-field-bg); color: var(-
 .bim-libbar-size .bim-select { min-width: 64px; }
 .bim-loading-more { padding: 18px; text-align: center; font-size: 13px; color: var(--bim-muted); border: 1px dashed var(--bim-field-line); border-radius: 8px; }
 
+
+/* 에셋 프리셋 */
+.bim-hidden-soft { display: none !important; }
+.bim-libbar { flex-wrap: wrap; }
+.bim-libbar-row { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-top: 6px; margin-top: 2px; border-top: 1px dashed var(--bim-field-line); }
+.bim-libbar-preset { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.bim-libbar-preset .bim-select { min-width: 160px; }
+.bim-input { font: 12px "Segoe UI", "Malgun Gothic", system-ui, sans-serif; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--bim-field-line); background: var(--bim-field-bg); color: var(--bim-field-fg); }
+.bim-preset-btn { font: 700 12px "Segoe UI", "Malgun Gothic", system-ui, sans-serif; padding: 5px 10px; border-radius: 6px; cursor: pointer; border: 1px dashed #8b5cf6; background: transparent; color: #7c3aed; white-space: nowrap; }
+.bim-preset-btn.bim-in-preset { border-style: solid; background: #ede9fe; color: #5b21b6; }
+html.bim-dark .bim-preset-btn { color: #c4b5fd; border-color: #a78bfa; }
+html.bim-dark .bim-preset-btn.bim-in-preset { background: #2e2650; color: #ddd6fe; }

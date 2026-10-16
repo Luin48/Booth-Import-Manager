@@ -33,6 +33,7 @@
     <nav class="tabs" role="tablist">
       <button class="active" data-tab="files">보낸 기록</button>
       <button data-tab="queue">대기열</button>
+      <button data-tab="presets">프리셋</button>
       <button data-tab="wish">찜 정리</button>
     </nav>
 
@@ -59,6 +60,16 @@
       <div id="queueList" class="list"></div>
     </section>
 
+    <section id="tab-presets" class="tab hidden">
+      <div class="row filter-row">
+        <select id="presetSel" class="grow" aria-label="에셋 프리셋"></select>
+        <button id="presetManageBtn" class="btn small" title="관리 페이지에서 편집">편집</button>
+      </div>
+      <div id="presetItems" class="list"></div>
+      <footer class="actions">
+        <button id="presetSendBtn" class="btn primary grow" disabled>1번에서 고른 프로젝트로 한번에 보내기</button>
+      </footer>
+    </section>
     <section id="tab-wish" class="tab hidden">
       <p class="muted">구매한 상품이 찜목록에 있으면 아래 규칙대로 정리해요. 먼저 미리보기로 확인한 뒤 실행돼요.</p>
       <div class="card wish-rules">

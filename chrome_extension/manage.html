@@ -23,6 +23,7 @@
       <button data-tab="projects" class="active">프로젝트</button>
       <button data-tab="tags">태그</button>
       <button data-tab="assign">프로젝트별 태그</button>
+      <button data-tab="presets">에셋 프리셋</button>
       <button data-tab="settings">설정</button>
     </nav>
 
@@ -129,6 +130,21 @@
             <table id="matrix" class="matrix"></table>
           </div>
         </div>
+      </section>
+
+      <!-- 에셋 프리셋 -->
+      <section id="tab-presets" class="tab hidden">
+        <div class="card block">
+          <h2>에셋 프리셋</h2>
+          <p class="muted">BOOTH 라이브러리 맨 위 BIM 줄에서 "에셋 프리셋"을 고르면 파일마다 <b>＋ 프리셋</b> 버튼이 생겨요. 받을 파일과 저장 태그만 모아 두었다가, 여기서 프로젝트를 골라 한 번에 보내요.</p>
+          <div class="row wrap">
+            <input id="newPresetName" type="text" class="grow" placeholder="새 프리셋 이름 (예: 새 아바타 기본 세트)" />
+            <button id="addPresetBtn" class="btn primary">프리셋 만들기</button>
+            <button id="presetCheckBtn" class="btn" title="BOOTH 라이브러리 전체를 읽어 프리셋에 담은 상품의 다운로드 항목이 바뀌었는지 확인해요">업데이트 확인</button>
+          </div>
+          <p id="presetCheckInfo" class="muted small-text"></p>
+        </div>
+        <div id="presetList" class="stack"></div>
       </section>
 
       <!-- 설정 -->

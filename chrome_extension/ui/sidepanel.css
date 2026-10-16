@@ -76,3 +76,5 @@ body { min-width: 300px; overflow-x: hidden; }
 .confirm-box { padding: 10px; margin-bottom: 8px; border: 1px solid var(--danger); border-radius: 8px; background: var(--danger-bg); }
 .qfile .grow { min-width: 0; }
 .qfile .chip, .qfile .btn { flex: none; }
+.file.changed { box-shadow: inset 3px 0 0 #f59e0b; }
+.file a.btn { text-decoration: none; flex: none; }

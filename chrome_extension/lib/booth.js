@@ -105,6 +105,40 @@ export async function pageCollectLibrary(maxPages) {
   return [...found.values()];
 }
 
+// ---- 주입용: 라이브러리 전체에서 상품별 다운로드 파일 목록 (프리셋 업데이트 확인) ----
+export async function pageCollectLibraryFiles(maxPages) {
+  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const items = {};
+  const parse = (html) => {
+    const doc = new DOMParser().parseFromString(html, "text/html");
+    const cards = new Set([...doc.querySelectorAll(".js-download-button[data-href]")].map((b) => b.closest("div.bg-white")).filter(Boolean));
+    for (const card of cards) {
+      const link = [...card.querySelectorAll('a[href*="/items/"]')].find((a) => /booth\.pm\/(?:[\w-]+\/)?items\/\d+/.test(a.href));
+      const id = link?.href.match(/items\/(\d+)/)?.[1];
+      if (!id) continue;
+      const files = items[id] || [];
+      for (const b of card.querySelectorAll(".js-download-button[data-href]")) {
+        const dl = b.dataset.href.match(/downloadables\/(\d+)/)?.[1];
+        if (!dl || files.some((f) => f.id === dl)) continue;
+        const row = b.closest(".desktop\\:flex") || b.parentElement?.parentElement?.parentElement;
+        files.push({ id: dl, label: (row?.querySelector(".min-w-0")?.textContent || "").trim() });
+      }
+      items[id] = files;
+    }
+    return cards.size;
+  };
+  for (const base of ["/library", "/library/gifts"]) {
+    for (let page = 1; page <= maxPages; page += 1) {
+      const res = await fetch(`${base}?page=${page}`, { credentials: "include" });
+      if (!res.ok) break;
+      const count = parse(await res.text());
+      if (!count) break;
+      await sleep(250);
+    }
+  }
+  return items;
+}
+
 // ---- 주입용: booth.pm 에서 상품 JSON 여러 개 조회 -------------------------
 export async function pageFetchItems(ids) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
