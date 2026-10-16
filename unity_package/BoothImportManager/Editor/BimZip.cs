@@ -95,6 +95,42 @@ namespace BoothImportManager
             return output;
         }
 
+        /// <summary>
+        /// zip 안의 항목 이름 목록 (폴더 제외). 썸네일 매칭 도구 등 다른 패키지에서 쓴다.
+        /// </summary>
+        public static List<string> ListNames(string zipPath)
+        {
+            using (var fs = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16))
+            {
+                var names = new List<string>();
+                foreach (var e in ReadCentralDirectory(fs))
+                    if (!e.Name.EndsWith("/")) names.Add(e.Name.Replace('\\', '/'));
+                return names;
+            }
+        }
+
+        /// <summary>
+        /// 풀지 않고 zip 항목을 스트림으로 읽는다. want(이름, 크기)가 true 인 항목마다 read(이름, 스트림) 호출.
+        /// 암호가 걸렸거나 지원하지 않는 압축 방식인 항목은 건너뛴다.
+        /// </summary>
+        public static void ForEachEntry(string zipPath, Func<string, long, bool> want, Action<string, Stream> read)
+        {
+            using (var fs = new FileStream(zipPath, FileMode.Open, FileAccess.Read, FileShare.Read, 1 << 16))
+            {
+                foreach (var e in ReadCentralDirectory(fs))
+                {
+                    var name = e.Name.Replace('\\', '/');
+                    if (name.EndsWith("/") || !want(name, e.Size)) continue;
+                    if ((e.Flags & 1) != 0 || (e.Method != 0 && e.Method != 8)) continue;
+                    var dataStart = LocalDataStart(fs, e);
+                    Stream src = new SubStream(fs, dataStart, e.CompressedSize);
+                    if (e.Method == 8) src = new DeflateStream(src, CompressionMode.Decompress, true);
+                    try { read(name, src); }
+                    finally { if (e.Method == 8) src.Dispose(); }
+                }
+            }
+        }
+
         // ---- 이름 해석 -------------------------------------------------------------
         private static readonly Encoding StrictUtf8 = new UTF8Encoding(false, true);
 

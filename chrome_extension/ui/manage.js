@@ -985,6 +985,25 @@ $("presetCheckBtn").addEventListener("click", async () => {
     $("presetCheckBtn").disabled = false;
   }
 });
+async function showLibraryExport() {
+  const { libraryExport } = await chrome.storage.local.get("libraryExport");
+  $("libraryExportInfo").textContent = libraryExport ? `마지막 저장: ${new Date(libraryExport.at).toLocaleString()} · 상품 ${libraryExport.count}개` : "아직 저장한 적 없음";
+}
+$("libraryExportBtn").addEventListener("click", async () => {
+  $("libraryExportBtn").disabled = true;
+  $("libraryExportInfo").textContent = "BOOTH 라이브러리를 읽는 중… (상품 수에 따라 조금 걸려요)";
+  try {
+    const res = await chrome.runtime.sendMessage({ type: "libraryExport" });
+    if (!res?.ok) throw new Error(res?.error || "저장 실패");
+    await showLibraryExport();
+  } catch (error) {
+    $("libraryExportInfo").textContent = "";
+    fail(error);
+  } finally {
+    $("libraryExportBtn").disabled = false;
+  }
+});
+showLibraryExport();
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.presetsVersion && !$("tab-presets").classList.contains("hidden")) loadPresets();
 });

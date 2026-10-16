@@ -1,8 +1,9 @@
 """ALCOM/VCC(VPM)용 패키지 zip 과 저장소 목록(vpm/index.json)을 만든다.
 
 사용:
-  python scripts/make_vpm.py zip <out.zip>     # 패키지 zip (package.json 이 맨 위)
-  python scripts/make_vpm.py index             # package.json 버전을 vpm/index.json 에 추가/갱신
+  python scripts/make_vpm.py zip <out.zip> [패키지]   # 패키지 zip (package.json 이 맨 위)
+  python scripts/make_vpm.py index [패키지]           # package.json 버전을 vpm/index.json 에 추가/갱신
+  패키지: BoothImportManager (기본) | BoothThumbnailMatcher
 """
 from __future__ import annotations
 
@@ -14,16 +15,25 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 SRC = ROOT / "unity_package" / "BoothImportManager"
+PKG_NS = "booth-import-manager-pkg"
 INDEX = ROOT / "vpm" / "index.json"
 REPO = "Luin48/Booth-Import-Manager"
 INDEX_URL = f"https://raw.githubusercontent.com/{REPO}/main/vpm/index.json"
 
 sys.path.insert(0, str(ROOT / "scripts"))
-from make_unitypackage import meta_for  # noqa: E402
+from make_unitypackage import PACKAGES, meta_for  # noqa: E402
+
+
+def select(pkg: str) -> None:
+    global SRC, PKG_NS
+    if pkg not in PACKAGES:
+        raise SystemExit(f"unknown package: {pkg}")
+    SRC = ROOT / "unity_package" / pkg
+    PKG_NS = f"{PACKAGES[pkg]}-pkg"
 
 
 def guid_for(rel: str) -> str:
-    return hashlib.md5(f"booth-import-manager-pkg:{rel}".encode("utf-8")).hexdigest()
+    return hashlib.md5(f"{PKG_NS}:{rel}".encode("utf-8")).hexdigest()
 
 
 def package_json() -> dict:
@@ -61,7 +71,8 @@ def update_index() -> None:
     data["url"] = INDEX_URL
     versions = data.setdefault("packages", {}).setdefault(pkg["name"], {}).setdefault("versions", {})
     entry = dict(pkg)
-    entry["url"] = f"https://github.com/{REPO}/releases/download/v{ver}/{pkg['name']}-{ver}.zip"
+    # 릴리즈 태그는 BIM 버전을 따른다 (추가 도구도 같은 릴리즈에 올림) → package.json 의 url 을 그대로
+    entry["url"] = pkg.get("url") or f"https://github.com/{REPO}/releases/download/v{ver}/{pkg['name']}-{ver}.zip"
     versions[ver] = entry
     INDEX.parent.mkdir(parents=True, exist_ok=True)
     INDEX.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
@@ -70,8 +81,12 @@ def update_index() -> None:
 
 if __name__ == "__main__":
     if len(sys.argv) >= 3 and sys.argv[1] == "zip":
+        if len(sys.argv) >= 4:
+            select(sys.argv[3])
         make_zip(sys.argv[2])
     elif len(sys.argv) >= 2 and sys.argv[1] == "index":
+        if len(sys.argv) >= 3:
+            select(sys.argv[2])
         update_index()
     else:
         print(__doc__)

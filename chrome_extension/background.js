@@ -1,5 +1,5 @@
 import * as core from "./lib/core.js";
-import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageCollectLibraryFiles, pageFetchItems, slimItem } from "./lib/booth.js";
+import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageCollectLibraryCatalog, pageCollectLibraryFiles, pageFetchItems, slimItem } from "./lib/booth.js";
 
 // ---- 사이드패널: 부스 페이지에서만 ---------------------------------------------
 const isBoothTab = (url) => /^https:\/\/([\w-]+\.)?booth\.pm(\/|$)/.test(url || "");
@@ -182,6 +182,13 @@ async function handle(msg, sender) {
       if (!items || typeof items !== "object") throw new Error("라이브러리를 읽지 못했어요. BOOTH에 로그인되어 있는지 확인해 주세요.");
       await core.recordItemFiles(items);
       return { items: Object.keys(items).length };
+    }
+    case "libraryExport": {
+      // 라이브러리 전체 목록 → 다운로드\BoothImportManager\_bim\library.json (유니티 썸네일 매칭 창이 읽음)
+      const items = await withBoothTab("https://accounts.booth.pm", "/library", pageCollectLibraryCatalog, [200]);
+      if (!Array.isArray(items)) throw new Error("라이브러리를 읽지 못했어요. BOOTH에 로그인되어 있는지 확인해 주세요.");
+      if (!items.length) throw new Error("라이브러리에 상품이 없거나 로그인되어 있지 않아요.");
+      return core.saveLibraryCatalog(items);
     }
     case "openManage":
       await chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") + (msg.hash || "") });

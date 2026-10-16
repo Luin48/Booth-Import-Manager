@@ -48,6 +48,12 @@ jobs:
           (cd chrome_extension && zip -qr "../release/BoothImportManager-ChromeExtension-v$v.zip" .)
           python scripts/make_unitypackage.py "release/BoothImportManager-Unity-v$v.unitypackage"
           python scripts/make_vpm.py zip "release/local.booth-import-manager-$v.zip"
+          # 추가 도구: 썸네일 매칭 (버전은 따로, 같은 릴리즈에 올림)
+          if [ -f unity_package/BoothThumbnailMatcher/package.json ]; then
+            mv_=$(python -c "import json;print(json.load(open('unity_package/BoothThumbnailMatcher/package.json'))['version'])")
+            python scripts/make_unitypackage.py "release/BoothThumbnailMatcher-Unity-v$mv_.unitypackage" BoothThumbnailMatcher
+            python scripts/make_vpm.py zip "release/local.booth-thumbnail-matcher-$mv_.zip" BoothThumbnailMatcher
+          fi
           ls -l release
 
       - name: Create GitHub release

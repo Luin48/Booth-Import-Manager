@@ -1,8 +1,8 @@
-"""unity_package/BoothImportManager 를 .unitypackage 로 묶는다 (유니티 없이).
+"""unity_package/<패키지> 를 .unitypackage 로 묶는다 (유니티 없이).
 
-결과물을 임포트하면 Assets/BoothImportManager/ 에 들어간다.
-(ALCOM/VCC 저장소로 추가하거나 관리 페이지의 '설치' 버튼을 쓰면 Packages/ 쪽에 들어간다.)
-사용: python scripts/make_unitypackage.py dist/BoothImportManager.unitypackage
+결과물을 임포트하면 Assets/<패키지>/ 에 들어간다.
+(ALCOM/VCC 저장소로 추가하면 Packages/ 쪽에 들어간다.)
+사용: python scripts/make_unitypackage.py dist/BoothImportManager.unitypackage [BoothImportManager|BoothThumbnailMatcher]
 """
 from __future__ import annotations
 
@@ -14,13 +14,26 @@ import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-SRC = ROOT / "unity_package" / "BoothImportManager"
-TARGET_PREFIX = "Assets/BoothImportManager"
+# 패키지 폴더 → GUID 이름공간 (바꾸면 업데이트 때 GUID 가 달라지니 그대로 둘 것)
+PACKAGES = {
+    "BoothImportManager": "booth-import-manager",
+    "BoothThumbnailMatcher": "booth-thumbnail-matcher",
+}
+PKG = "BoothImportManager"
+SRC = ROOT / "unity_package" / PKG
+TARGET_PREFIX = f"Assets/{PKG}"
+
+
+def select(pkg: str) -> None:
+    global PKG, SRC, TARGET_PREFIX
+    if pkg not in PACKAGES:
+        raise SystemExit(f"unknown package: {pkg}")
+    PKG, SRC, TARGET_PREFIX = pkg, ROOT / "unity_package" / pkg, f"Assets/{pkg}"
 
 
 def guid_for(path: str) -> str:
     # 같은 경로는 항상 같은 GUID → 재임포트해도 중복 생성되지 않음
-    return hashlib.md5(f"booth-import-manager:{path}".encode("utf-8")).hexdigest()
+    return hashlib.md5(f"{PACKAGES[PKG]}:{path}".encode("utf-8")).hexdigest()
 
 
 def meta_for(guid: str, is_folder: bool, suffix: str) -> str:
@@ -61,4 +74,6 @@ def main(out: str) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "dist" / "BoothImportManager.unitypackage"))
+    if len(sys.argv) > 2:
+        select(sys.argv[2])
+    main(sys.argv[1] if len(sys.argv) > 1 else str(ROOT / "dist" / f"{PKG}.unitypackage"))

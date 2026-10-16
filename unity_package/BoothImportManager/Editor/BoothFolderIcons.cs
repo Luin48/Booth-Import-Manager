@@ -107,6 +107,22 @@ namespace BoothImportManager
 
         public static int Count => Map.Count;
 
+        /// <summary>폴더(GUID)에 썸네일 아이콘이 붙어 있는지</summary>
+        public static bool HasIcon(string guid) => !string.IsNullOrEmpty(guid) && Map.ContainsKey(guid);
+
+        /// <summary>붙어 있는 아이콘 정보 (없으면 null)</summary>
+        public static Entry Get(string guid) => !string.IsNullOrEmpty(guid) && Map.TryGetValue(guid, out var e) ? e : null;
+
+        /// <summary>모든 아이콘 정보 (복사본)</summary>
+        public static List<Entry> All() => Map.Values.ToList();
+
+        /// <summary>다른 도구가 FolderIcons.json 을 고쳤을 때 다시 읽기</summary>
+        public static void Reload()
+        {
+            map = null;
+            EditorApplication.RepaintProjectWindow();
+        }
+
         private static string CopyImage(string source, string name)
         {
             if (string.IsNullOrEmpty(source) || !File.Exists(source)) return "";
