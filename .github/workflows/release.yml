@@ -59,7 +59,11 @@ jobs:
           if [ "${{ inputs.prerelease }}" = "true" ]; then flags="--prerelease"; fi
           if gh release view "v$v" >/dev/null 2>&1; then
             gh release upload "v$v" release/* --clobber
-            gh release edit "v$v" --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md"
+            if [ "${{ inputs.prerelease }}" = "true" ]; then
+              gh release edit "v$v" --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md" --prerelease
+            else
+              gh release edit "v$v" --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md" --prerelease=false --latest
+            fi
           else
             gh release create "v$v" release/* --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md" --target "$GITHUB_SHA" $flags
           fi
