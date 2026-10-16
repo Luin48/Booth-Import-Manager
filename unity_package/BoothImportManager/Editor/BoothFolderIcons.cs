@@ -6,7 +6,6 @@ using System.Text;
 using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
-using UnityEngine.Networking;
 
 namespace BoothImportManager
 {
@@ -49,8 +48,10 @@ namespace BoothImportManager
             public string itemUrl;
             public string shopName;
             public string shopUrl;
-            public string itemThumb;
-            public string shopIcon;
+            public string itemThumb;     // 로컬 이미지 경로
+            public string shopIcon;      // 로컬 이미지 경로
+            public string itemThumbUrl;
+            public string shopIconUrl;
             public string fileLabel;
             public string packageName;
         }
@@ -350,51 +351,34 @@ namespace BoothImportManager
             return guid != null && Map.TryGetValue(guid, out var e) && !string.IsNullOrEmpty(e.url);
         }
 
-        // ---- 수동 연결: 로컬 앱에 상품 URL 을 넘겨 이미지를 받아온다 --------------
+        // ---- 수동 연결: 상품 URL 로 부스에서 직접 썸네일을 받아온다 --------------------
         public static void LinkFromBooth(string folder, string itemUrlOrId, bool parentIsShop, Action<string> done)
         {
-            var port = BoothImportSettings.instance.LocalAppPort;
-            var body = Encoding.UTF8.GetBytes(JsonUtility.ToJson(new LinkRequest { item = itemUrlOrId }));
-            var req = new UnityWebRequest($"http://127.0.0.1:{port}/api/booth/icons", "POST")
-            {
-                uploadHandler = new UploadHandlerRaw(body),
-                downloadHandler = new DownloadHandlerBuffer(),
-                timeout = 30,
-            };
-            req.SetRequestHeader("Content-Type", "application/json");
-            var op = req.SendWebRequest();
-            op.completed += _ =>
+            System.Threading.Tasks.Task.Run(() =>
             {
                 try
                 {
-                    if (req.result != UnityWebRequest.Result.Success)
+                    var meta = BimNet.FetchItem(itemUrlOrId);
+                    BimNet.EnsureThumbs(meta);
+                    BimContext.Post(() =>
                     {
-                        done($"실패: {req.error} (로컬 앱이 켜져 있는지 확인)");
-                        return;
-                    }
-                    var meta = JsonUtility.FromJson<BoothMeta>(req.downloadHandler.text);
-                    if (string.IsNullOrEmpty(meta?.itemThumb))
-                    {
-                        done("썸네일을 받지 못했어요");
-                        return;
-                    }
-                    Assign(folder, "item", meta.itemThumb, meta);
-                    var parent = Path.GetDirectoryName(folder)?.Replace('\\', '/');
-                    if (parentIsShop && !string.IsNullOrEmpty(parent) && parent != "Assets" && !string.IsNullOrEmpty(meta.shopIcon))
-                        Assign(parent, "shop", meta.shopIcon, meta);
-                    done($"연결됨: {meta.itemName}");
+                        if (string.IsNullOrEmpty(meta.itemThumb))
+                        {
+                            done("썸네일을 받지 못했어요");
+                            return;
+                        }
+                        Assign(folder, "item", meta.itemThumb, meta);
+                        var parent = Path.GetDirectoryName(folder)?.Replace('\\', '/');
+                        if (parentIsShop && !string.IsNullOrEmpty(parent) && parent != "Assets" && !string.IsNullOrEmpty(meta.shopIcon))
+                            Assign(parent, "shop", meta.shopIcon, meta);
+                        done($"연결됨: {meta.itemName}");
+                    });
                 }
-                finally
+                catch (Exception e)
                 {
-                    req.Dispose();
+                    BimContext.Post(() => done($"실패: {e.Message}"));
                 }
-            };
-        }
-
-        [Serializable]
-        private class LinkRequest
-        {
-            public string item;
+            });
         }
     }
 

@@ -19,9 +19,9 @@
     </header>
 
     <section id="offline" class="card offline hidden">
-      <strong>로컬 앱이 꺼져 있어요</strong>
-      <p class="muted">BoothImportManager.exe를 실행하면 자동으로 연결돼요. 윈도우 시작 시 자동 실행은 <code>scripts\install-startup.ps1</code>로 켤 수 있어요.</p>
-      <button id="retryBtn" class="btn primary">다시 연결</button>
+      <strong>아직 유니티 프로젝트 목록이 없어요</strong>
+      <p class="muted">BIM 패키지가 설치된 유니티 프로젝트를 하나 켜거나, 관리 페이지에서 ALCOM/VCC 프로젝트 폴더를 등록하세요.</p>
+      <button id="retryBtn" class="btn primary">관리 페이지 열기</button>
     </section>
 
     <section id="target" class="card target">
@@ -31,7 +31,7 @@
     </section>
 
     <nav class="tabs" role="tablist">
-      <button class="active" data-tab="files">받은 파일</button>
+      <button class="active" data-tab="files">보낸 기록</button>
       <button data-tab="queue">대기열</button>
       <button data-tab="wish">찜 정리</button>
     </nav>
@@ -39,8 +39,9 @@
     <section id="tab-files" class="tab">
       <div class="row filter-row">
         <select id="fileFilter" aria-label="필터">
-          <option value="todo">미처리</option>
-          <option value="all">전체</option>
+          <option value="recent">최근</option>
+          <option value="todo">실패·패키지 없음</option>
+          <option value="all">전체 (숨김 포함)</option>
           <option value="queued">대기 중</option>
           <option value="imported">임포트됨</option>
         </select>
@@ -48,9 +49,9 @@
       </div>
       <div id="fileList" class="list"></div>
       <footer class="actions">
-        <button id="queueBtn" class="btn primary grow" disabled>3 ▶ 선택 파일 Unity로</button>
+        <button id="queueBtn" class="btn primary grow" disabled>3 ▶ 선택한 것 다시 보내기</button>
         <button id="hideBtn" class="btn" disabled title="목록에서만 숨김">숨김</button>
-        <button id="deleteBtn" class="btn danger" disabled title="보관 폴더에서 삭제">삭제</button>
+        <button id="deleteBtn" class="btn danger" disabled title="기록만 지워요 (파일은 그대로)">기록 삭제</button>
       </footer>
     </section>
 

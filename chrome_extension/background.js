@@ -1,80 +1,16 @@
-import { localApi, ping } from "./lib/local.js";
+import * as core from "./lib/core.js";
 import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageFetchItems, slimItem } from "./lib/booth.js";
 
 // 아이콘 클릭 → 사이드패널
 chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
 
-const isBoothUrl = (value) => typeof value === "string" && /(^|\/\/|\.)booth\.pm\//.test(value.replace(/^https?:\/\//, "//"));
-const downloadableIdOf = (url) => (String(url || "").match(/downloadables\/(\d+)/) || [])[1] || "";
-
-// ---- 다운로드 의도 저장 (서비스워커가 재시작돼도 유지되도록 session storage) ----
-async function setIntent(downloadId, intent) {
-  await chrome.storage.session.set({ [`intent:${downloadId}`]: intent });
-}
-async function takeIntent(downloadId) {
-  const key = `intent:${downloadId}`;
-  const data = await chrome.storage.session.get(key);
-  await chrome.storage.session.remove(key);
-  return data[key] || null;
-}
-// 부스 기본 Download 버튼을 눌렀을 때 상품 정보만 기억해 둔다 (태그 없이 보관 폴더로)
-async function noteClick(downloadableId, booth) {
-  if (!downloadableId) return;
-  await chrome.storage.session.set({ [`click:${downloadableId}`]: { booth, at: Date.now() } });
-}
-async function takeClick(downloadableId) {
-  if (!downloadableId) return null;
-  const key = `click:${downloadableId}`;
-  const data = await chrome.storage.session.get(key);
-  await chrome.storage.session.remove(key);
-  const entry = data[key];
-  return entry && Date.now() - entry.at < 10 * 60 * 1000 ? entry : null;
-}
-
-chrome.downloads.onCreated.addListener(async (item) => {
-  if (!isBoothUrl(item.url) && !isBoothUrl(item.referrer)) return;
-  const existing = await chrome.storage.session.get(`intent:${item.id}`);
-  if (existing[`intent:${item.id}`]) return;
-  const click = await takeClick(downloadableIdOf(item.url));
-  if (click) await setIntent(item.id, { tag: "", autoQueue: false, booth: click.booth });
-});
-
+// ---- 다운로드 → 대기열 (lib/core.js) -------------------------------------------
+chrome.downloads.onDeterminingFilename.addListener((item, suggest) => core.onDeterminingFilename(item, suggest));
 chrome.downloads.onChanged.addListener((delta) => {
-  if (!delta.state) return;
-  if (delta.state.current === "interrupted") {
-    takeIntent(delta.id).then((intent) => intent && broadcast({ type: "download-failed", booth: intent.booth }));
-    return;
-  }
-  if (delta.state.current !== "complete") return;
-  chrome.downloads.search({ id: delta.id }, async (items) => {
-    const item = items && items[0];
-    if (!item || !item.filename) return;
-    if (![item.url, item.finalUrl, item.referrer].some(isBoothUrl)) return;
-    const intent = (await takeIntent(item.id)) || {};
-    const filename = item.filename.split(/[\\/]/).pop();
-    try {
-      const result = await localApi("/api/download-complete", {
-        method: "POST",
-        timeoutMs: 120000,
-        body: {
-          filename,
-          fullPath: item.filename,
-          sourceUrl: item.url || "",
-          finalUrl: item.finalUrl || "",
-          referrer: item.referrer || "",
-          tag: intent.tag || "",
-          project: intent.project || "",
-          autoQueue: Boolean(intent.autoQueue),
-          booth: { ...(intent.booth || {}), downloadableId: intent.booth?.downloadableId || downloadableIdOf(item.url) },
-        },
-      });
-      broadcast({ type: "download-done", result, booth: intent.booth });
-      setBadge(result.status === "queued" ? "✓" : "");
-    } catch (error) {
-      broadcast({ type: "download-error", error: error.message, booth: intent.booth });
-      setBadge("!");
-    }
-  });
+  core.onDownloadChanged(delta, (msg) => {
+    broadcast(msg);
+    if (msg.type === "download-done") setBadge(msg.result?.status === "queued" ? "✓" : "!");
+  }).catch((error) => broadcast({ type: "download-error", error: error.message }));
 });
 
 function setBadge(text) {
@@ -161,25 +97,30 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   return true;
 });
 
+async function bootData() {
+  const [config, projects, prefs] = await Promise.all([
+    core.getConfig(),
+    core.listProjects({ includeHidden: false }),
+    chrome.storage.local.get(["lastProject", "lastTagByProject"]),
+  ]);
+  const data = { config: { tags: config.tags, tagSets: config.tagSets }, projects };
+  chrome.storage.local.set({ bootCache: { ...data, at: Date.now() } }).catch(() => {});
+  return { ...data, lastProject: prefs.lastProject || "", lastTagByProject: prefs.lastTagByProject || {} };
+}
+
 async function handle(msg, sender) {
   switch (msg.type) {
+    case "api":
+      return core.route(msg.path, msg.method || "GET", msg.body || {});
     case "ping":
-      return ping();
-    case "bootstrap": {
-      // 콘텐츠 스크립트용: 태그 + 프로젝트 + 마지막 선택값
-      const [config, projectList, prefs] = await Promise.all([
-        localApi("/api/config"),
-        localApi("/api/projects?all=0&deep=0"),
-        chrome.storage.local.get(["lastProject", "lastTagByProject"]),
-      ]);
-      const boot = { config, projects: projectList, lastProject: prefs.lastProject || "", lastTagByProject: prefs.lastTagByProject || {} };
-      // 다음 페이지에서 바로 그릴 수 있게 캐시 (콘텐츠 스크립트가 먼저 이걸로 그리고, 응답이 오면 갱신)
-      chrome.storage.local.set({ bootCache: { config, projects: projectList, at: Date.now() } }).catch(() => {});
-      return boot;
-    }
+      return core.route("/ping");
+    case "bootstrap":
+      // 설정·프로젝트는 크롬 저장소에 있어서 바로 응답. 실행 상태는 뒤에서 확인.
+      core.liveUnities().catch(() => {});
+      return bootData();
     case "projectsLive":
-      // 실행 중/꺼짐 실시간 표시용 (가벼운 조회)
-      return localApi("/api/projects?all=0&deep=0");
+      await core.liveUnities();
+      return core.listProjects({ includeHidden: false });
     case "rememberChoice": {
       const prefs = await chrome.storage.local.get("lastTagByProject");
       const map = prefs.lastTagByProject || {};
@@ -188,27 +129,11 @@ async function handle(msg, sender) {
       return true;
     }
     case "status":
-      return localApi("/api/booth/status", { method: "POST", body: { itemIds: msg.itemIds || [], downloadableIds: msg.downloadableIds || [] } });
+      return core.boothStatus({ itemIds: msg.itemIds || [], downloadableIds: msg.downloadableIds || [] });
     case "noteClick":
-      await noteClick(msg.downloadableId, msg.booth);
-      return true;
-    case "unity": {
-      // 이미 받아둔 파일이면 재다운로드 없이 큐로
-      if (msg.preferLocal && msg.booth?.downloadableId) {
-        try {
-          const res = await localApi("/api/booth/requeue", { method: "POST", body: { downloadableId: msg.booth.downloadableId, tag: msg.tag, project: msg.project || "" } });
-          broadcast({ type: "download-done", result: { ...res, status: res.status || "queued" }, booth: msg.booth });
-          return { mode: "requeue", result: res };
-        } catch {
-          /* 로컬에 없으면 아래에서 새로 받기 */
-        }
-      }
-      const alive = await ping();
-      if (!alive.ok) throw new Error("로컬 앱이 꺼져 있어요. BoothImportManager.exe를 먼저 실행해 주세요.");
-      const downloadId = await chrome.downloads.download({ url: msg.url, conflictAction: "uniquify", saveAs: false });
-      await setIntent(downloadId, { tag: msg.tag || "", project: msg.project || "", autoQueue: msg.autoQueue !== false, booth: msg.booth || {} });
-      return { mode: "download", downloadId };
-    }
+      return true; // v0.4: 부스 기본 Download 버튼은 그냥 크롬 다운로드
+    case "unity":
+      return core.startJob({ url: msg.url, project: msg.project, tag: msg.tag, booth: msg.booth || {}, preferLocal: Boolean(msg.preferLocal) }, broadcast);
     case "itemJson": {
       // 콘텐츠 스크립트가 다른 출처(상점 서브도메인)일 때 대신 조회
       const res = await fetch(`https://booth.pm/ja/items/${msg.id}.json`, { credentials: "include" });
@@ -235,9 +160,12 @@ async function handle(msg, sender) {
 chrome.runtime.onInstalled.addListener(async () => {
   try {
     const all = await chrome.storage.local.get(null);
-    const stale = Object.keys(all).filter((k) => k.startsWith("darkcss:") && !k.startsWith("darkcss:v2"));
+    const stale = Object.keys(all).filter((k) => k.startsWith("darkcss:") && !k.startsWith("darkcss:v3"));
     if (stale.length) await chrome.storage.local.remove(stale);
   } catch {
     /* ignore */
   }
+  // v0.3(exe) 를 쓰고 있었다면 태그·프로젝트 설정을 한 번 가져온다
+  core.autoMigrate().catch(() => {});
 });
+chrome.runtime.onStartup.addListener(() => core.autoMigrate().catch(() => {}));

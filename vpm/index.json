@@ -1,0 +1,25 @@
+{
+  "name": "Booth Import Manager",
+  "id": "io.github.luin48.booth-import-manager",
+  "author": "Luin48",
+  "url": "https://raw.githubusercontent.com/Luin48/Booth-Import-Manager/main/vpm/index.json",
+  "packages": {
+    "local.booth-import-manager": {
+      "versions": {
+        "0.4.0": {
+          "name": "local.booth-import-manager",
+          "version": "0.4.0",
+          "displayName": "Booth Import Manager",
+          "description": "BOOTH(booth.pm)에서 받은 에셋을 크롬 확장과 함께 자동으로 임포트하고 태그 폴더로 정리합니다. (Chrome extension companion)",
+          "unity": "2022.3",
+          "author": {
+            "name": "Luin48",
+            "url": "https://github.com/Luin48/Booth-Import-Manager"
+          },
+          "url": "https://github.com/Luin48/Booth-Import-Manager/releases/download/v0.4.0/local.booth-import-manager-0.4.0.zip",
+          "vpmDependencies": {}
+        }
+      }
+    }
+  }
+}

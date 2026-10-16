@@ -1,6 +1,6 @@
 // accounts.booth.pm/library — 파일마다 [프로젝트▾][태그▾][▶ Unity로] 붙이기
 (() => {
-  const { el, send, picker, statusChips, toast } = window.BIM;
+  const { el, send, picker, statusChips, toast, NO_PROJECT } = window.BIM;
   const idFromHref = (href, kind) => (String(href || "").match(new RegExp(`${kind}/(\\d+)`)) || [])[1] || "";
 
   // 라이브러리(div.bg-white 카드)와 주문 상세(.sheet + .legacy-list-item) 둘 다 지원
@@ -191,7 +191,10 @@
         preferLocal: Boolean(status?.present),
         booth,
       });
-      toast(res.mode === "requeue" ? `이미 받은 파일 → ${choice.tag} 큐에 추가` : `다운로드 시작: ${file.fileLabel}`, "info");
+      toast(
+        res.mode === "plain" ? `다운로드 폴더로 받는 중: ${file.fileLabel}` : res.mode === "requeue" ? `이미 받은 파일 → ${projectName(choice.project)} / ${choice.tag} 대기열에 추가` : `다운로드 시작: ${file.fileLabel}`,
+        "info",
+      );
     } catch (error) {
       toast(error.message, "error");
     }
@@ -227,7 +230,9 @@
       onChange: (choice) => {
         for (const b of fileButtons) {
           b.classList.toggle("bim-off", !choice);
-          b.title = choice ? `${projectName(choice.project)} / ${choice.tag} 로 임포트` : "위에서 프로젝트와 태그를 먼저 고르세요";
+          const none = choice?.project === NO_PROJECT;
+          b.textContent = none ? "⬇ 받기" : "▶ Unity로";
+          b.title = !choice ? "위에서 프로젝트와 태그를 먼저 고르세요" : none ? "원래 다운로드 폴더로 받기" : `${projectName(choice.project)} / ${choice.tag} 로 임포트`;
         }
       },
       onGo: async (choice) => {
@@ -298,10 +303,14 @@
     }
     // 처음 상태 반영 (기억해 둔 프로젝트·태그가 있으면 바로 활성)
     const initial = cardPicker.getChoice();
-    for (const b of fileButtons) b.classList.toggle("bim-off", !initial);
+    for (const b of fileButtons) {
+      b.classList.toggle("bim-off", !initial);
+      if (initial?.project === NO_PROJECT) b.textContent = "⬇ 받기";
+    }
   }
 
   function projectName(key) {
+    if (key === NO_PROJECT) return "다운로드 폴더";
     return window.BIM.boot?.projects?.find((p) => p.key === key)?.name || key;
   }
 
@@ -322,7 +331,7 @@
   async function init() {
     try {
       const boot = await window.BIM.bootstrap();
-      if (!boot.projects.length) banner("등록된 유니티 프로젝트가 없어요.", "관리 페이지 열기", () => send("openManage", { hash: "#projects" }));
+      if (!boot.projects.length) banner("아직 유니티 프로젝트 목록이 없어요. BIM 패키지를 설치한 유니티 프로젝트를 하나 켜거나, 관리 페이지에서 프로젝트 폴더를 등록하세요.", "관리 페이지 열기", () => send("openManage", { hash: "#projects" }));
     } catch (error) {
       banner(`${error.message}`, "다시 시도", () => location.reload());
       return;
@@ -350,7 +359,7 @@
     if (msg.type === "download-done") {
       const r = msg.result || {};
       if (r.queueError) toast(`큐 실패: ${r.queueError}`, "error");
-      else if (r.status === "queued") toast(`${r.projectName || ""} 큐 등록 ✓ ${r.running ? "(곧 임포트)" : "(유니티 켜면 임포트)"}`, "ok");
+      else if (r.status === "queued") toast(`${r.projectName || ""} 대기열 등록 ✓ ${r.running ? "(곧 임포트)" : "(유니티 켜면 임포트)"}`, "ok");
       else if (r.status === "no_package") toast(`${r.filename}: unitypackage 없음 (보관 폴더에 저장됨)`, "warn");
       else toast(`보관 폴더로 이동: ${r.filename}`, "info");
       refreshStatus();

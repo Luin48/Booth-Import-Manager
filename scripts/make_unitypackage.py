@@ -1,7 +1,7 @@
 """unity_package/BoothImportManager 를 .unitypackage 로 묶는다 (유니티 없이).
 
 결과물을 임포트하면 Assets/BoothImportManager/ 에 들어간다.
-(관리 페이지의 '설치' 버튼은 Packages/ 쪽으로 넣는 방식이라 이 파일이 꼭 필요하진 않다.)
+(ALCOM/VCC 저장소로 추가하거나 관리 페이지의 '설치' 버튼을 쓰면 Packages/ 쪽에 들어간다.)
 사용: python scripts/make_unitypackage.py dist/BoothImportManager.unitypackage
 """
 from __future__ import annotations

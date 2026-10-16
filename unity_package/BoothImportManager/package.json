@@ -1,7 +1,13 @@
 {
   "name": "local.booth-import-manager",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "displayName": "Booth Import Manager",
-  "description": "Imports queued Booth unitypackages per project and organizes assets by tag.",
-  "unity": "2022.3"
+  "description": "BOOTH(booth.pm)에서 받은 에셋을 크롬 확장과 함께 자동으로 임포트하고 태그 폴더로 정리합니다. (Chrome extension companion)",
+  "unity": "2022.3",
+  "author": {
+    "name": "Luin48",
+    "url": "https://github.com/Luin48/Booth-Import-Manager"
+  },
+  "url": "https://github.com/Luin48/Booth-Import-Manager/releases/download/v0.4.0/local.booth-import-manager-0.4.0.zip",
+  "vpmDependencies": {}
 }

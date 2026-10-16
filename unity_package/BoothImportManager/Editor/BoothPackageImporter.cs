@@ -23,7 +23,6 @@ namespace BoothImportManager
             catch { Cleanup(); return; }
             if (state == null || string.IsNullOrEmpty(state.packagePath)) { Cleanup(); return; }
 
-            BoothQueueWatcher.SetImporting(true);
             var frame = 0;
             EditorApplication.update += Wait;
             void Wait()
@@ -34,11 +33,13 @@ namespace BoothImportManager
             }
         }
 
-        public static void ImportPackage(string packagePath, string tag)
+        public static bool HasPending => File.Exists(PendingFile);
+
+        public static void ImportPackage(string packagePath, string tag, string assetRoot, BoothFolderIcons.BoothMeta meta)
         {
             if (!File.Exists(packagePath))
             {
-                BoothQueueWatcher.ImportFinished();
+                BimJobRunner.PackageFinished(false, "파일이 없어요", null);
                 return;
             }
 
@@ -48,9 +49,10 @@ namespace BoothImportManager
             {
                 packagePath = packagePath,
                 tag = tag,
+                assetRoot = assetRoot,
                 expectedFolders = expectedFolders,
                 packagePaths = packagePaths.ToArray(),
-                booth = BoothFolderIcons.ReadSidecar(packagePath),
+                booth = meta,
             };
             File.WriteAllText(PendingFile, JsonUtility.ToJson(state), Encoding.UTF8);
 
@@ -75,15 +77,7 @@ namespace BoothImportManager
                 AssetDatabase.importPackageFailed -= OnFailed;
                 Debug.LogError($"[BoothImportManager] Import failed: {name} - {error}");
                 Cleanup();
-                // 실패한 파일은 .failed 로 이름을 바꿔 재시도 반복을 막는다 (로컬 앱이 '실패'로 표시)
-                try
-                {
-                    var failed = packagePath + ".failed";
-                    if (File.Exists(failed)) File.Delete(failed);
-                    if (File.Exists(packagePath)) File.Move(packagePath, failed);
-                }
-                catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Could not mark failed: {e.Message}"); }
-                BoothQueueWatcher.ImportFinished();
+                BimJobRunner.PackageFinished(false, error, null);
             }
 
             void Complete()
@@ -123,7 +117,7 @@ namespace BoothImportManager
             if (!File.Exists(PendingFile)) return;
             Cleanup();
 
-            var assetRoot = NormalizeAssetPath(BoothImportSettings.instance.ResolveAssetRoot(state.packagePath));
+            var assetRoot = NormalizeAssetPath(string.IsNullOrWhiteSpace(state.assetRoot) ? BoothImportSettings.instance.AssetRootFolder : state.assetRoot);
             var targetRoot = state.tag == UntaggedTagName
                 ? assetRoot
                 : $"{assetRoot}/{SanitizeFolderName(state.tag)}";
@@ -171,14 +165,9 @@ namespace BoothImportManager
                 catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Folder icon failed: {e.Message}"); }
             }
 
-            try { File.Delete(state.packagePath); }
-            catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Queue file delete failed: {e.Message}"); }
-            try { if (File.Exists(state.packagePath + ".booth.json")) File.Delete(state.packagePath + ".booth.json"); }
-            catch { }
-
             AssetDatabase.Refresh();
             ScheduleDelayedDuplicateMerge(assetRoot);
-            BoothQueueWatcher.ImportFinished();
+            BimJobRunner.PackageFinished(true, null, targetRoot);
         }
 
         private static List<string> FindImportedRootFolders(PendingState state, string targetRoot)
@@ -465,6 +454,7 @@ namespace BoothImportManager
         {
             public string packagePath;
             public string tag;
+            public string assetRoot;
             public string[] expectedFolders;
             public string[] packagePaths;
             public BoothFolderIcons.BoothMeta booth;

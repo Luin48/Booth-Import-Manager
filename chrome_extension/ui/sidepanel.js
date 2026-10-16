@@ -22,14 +22,15 @@ const send = (type, payload = {}) =>
     }),
   );
 
-const STATUS_TEXT = { pending: "대기", queued: "대기", imported: "임포트됨", failed: "실패", no_package: "패키지 없음", downloaded: "받음", cancelled: "취소" };
+const STATUS_TEXT = { downloading: "받는 중", queued: "대기", importing: "임포트 중", imported: "임포트됨", failed: "실패", no_package: "패키지 없음", cancelled: "취소" };
 const UNTAGGED = "태그 없음";
+const ACTIVE = new Set(["downloading", "queued", "importing"]);
 
 const state = {
-  online: false,
+  unities: [],
   config: null,
   projects: [],
-  assets: [],
+  jobs: [],
   selected: new Set(),
   project: "",
   tag: "",
@@ -37,30 +38,27 @@ const state = {
   wishScan: null,
 };
 
-// ---- 연결 / 로드 ------------------------------------------------------------
+// ---- 로드 -------------------------------------------------------------------
 async function load() {
   const alive = await ping();
-  state.online = alive.ok;
-  $("conn").querySelector(".dot").className = `dot ${alive.ok ? "on" : "off"}`;
-  $("connText").textContent = alive.ok ? `연결됨 v${alive.version}` : "꺼짐";
-  $("offline").classList.toggle("hidden", alive.ok);
-  $("target").classList.toggle("hidden", !alive.ok);
-  if (!alive.ok) {
-    $("fileList").replaceChildren(h("div", { class: "empty", text: "로컬 앱 연결 후 표시돼요" }));
-    return;
-  }
-  const [config, projects, assets, prefs] = await Promise.all([
+  state.unities = alive.unities;
+  const n = alive.unities.length;
+  $("conn").querySelector(".dot").className = `dot ${n ? "on" : "off"}`;
+  $("connText").textContent = n ? `유니티 ${n}개` : "유니티 꺼짐";
+  $("conn").title = n ? alive.unities.map((u) => u.name).join(", ") : "켜진 유니티가 없어도 [Unity로]는 대기열에 쌓였다가 유니티를 켜면 임포트돼요";
+  const [config, projects, jobs, prefs] = await Promise.all([
     localApi("/api/config"),
     localApi("/api/projects?all=0"),
-    localApi("/api/assets?all=1"),
+    localApi("/api/jobs"),
     chrome.storage.local.get(["lastProject", "lastTagByProject"]),
   ]);
   state.config = config;
   state.projects = projects;
-  state.assets = assets;
+  state.jobs = jobs;
   state.lastTagByProject = prefs.lastTagByProject || {};
   if (!state.project || !projects.some((p) => p.key === state.project)) state.project = prefs.lastProject || "";
-  state.selected = new Set([...state.selected].filter((f) => assets.some((a) => a.filename === f)));
+  state.selected = new Set([...state.selected].filter((id) => jobs.some((j) => j.jobId === id)));
+  $("offline").classList.toggle("hidden", projects.length > 0);
   renderTarget();
   renderFiles();
   if (!$("tab-queue").classList.contains("hidden")) renderQueue();
@@ -77,7 +75,7 @@ function tagsFor(projectKey) {
 
 function renderTarget() {
   const sel = $("projectSel");
-  sel.replaceChildren(h("option", { value: "", text: state.projects.length ? "유니티 프로젝트 선택" : "프로젝트 없음 — 관리에서 폴더 등록" }));
+  sel.replaceChildren(h("option", { value: "", text: state.projects.length ? "유니티 프로젝트 선택" : "프로젝트 없음 — 유니티를 켜거나 관리에서 폴더 등록" }));
   for (const p of state.projects) {
     sel.append(h("option", { value: p.key, text: `${p.running ? "●" : "○"} ${p.name}${p.pending ? `  (대기 ${p.pending})` : ""}` }));
   }
@@ -95,7 +93,7 @@ function renderTarget() {
 
   const p = state.projects.find((x) => x.key === state.project);
   $("projectInfo").textContent = p
-    ? `${p.running ? "유니티 실행 중 — 바로 임포트" : "유니티 꺼짐 — 켜면 자동 임포트"} · ${p.assetRoot}${p.installed === "" ? " · ⚠ 패키지 미설치" : ""}`
+    ? `${p.running ? "유니티 실행 중 — 바로 임포트" : "유니티 꺼짐 — 켜면 자동 임포트"} · ${p.assetRoot}${p.installed === "" ? " · ⚠ BIM 패키지 미설치" : ""}`
     : "";
   updateActions();
 }
@@ -116,88 +114,82 @@ function remember() {
   chrome.storage.local.set({ lastProject: state.project, lastTagByProject: state.lastTagByProject });
 }
 
-// ---- 받은 파일 ---------------------------------------------------------------
-function assetStatus(a) {
-  return a.booth?.status || (a.status === "pending" ? "downloaded" : a.status);
-}
-function filteredAssets() {
+// ---- 받은 파일 (작업 기록) -------------------------------------------------------
+function filteredJobs() {
   const f = $("fileFilter").value;
-  return state.assets.filter((a) => {
-    const st = assetStatus(a);
-    if (f === "todo") return !a.hidden && (st === "downloaded" || st === "failed");
-    if (f === "queued") return st === "queued";
-    if (f === "imported") return st === "imported";
-    return true;
+  return state.jobs.filter((j) => {
+    if (f === "todo") return !j.hidden && (j.state === "failed" || j.state === "no_package");
+    if (f === "queued") return ACTIVE.has(j.state);
+    if (f === "imported") return j.state === "imported";
+    return !j.hidden || f === "all";
   });
 }
 
 function renderFiles() {
   const list = $("fileList");
-  const assets = filteredAssets();
-  if (!assets.length) {
-    list.replaceChildren(h("div", { class: "empty", text: "표시할 파일이 없어요" }));
+  const jobs = filteredJobs();
+  if (!jobs.length) {
+    list.replaceChildren(h("div", { class: "empty", text: "표시할 기록이 없어요" }));
   } else {
     list.replaceChildren(
-      ...assets.map((a) => {
-        const b = a.booth || {};
-        const chips = (b.queues || [])
-          .filter((q) => q.status !== "cancelled")
-          .map((q) => h("span", { class: `chip ${q.status}`, title: q.tag, text: `${q.projectName || "공용"} · ${STATUS_TEXT[q.status] || q.status}` }));
-        if (!chips.length) chips.push(h("span", { class: "chip", text: a.file_type === "zip" || a.file_type === "unitypackage" ? "미처리" : a.file_type }));
-        const row = h(
+      ...jobs.map((j) =>
+        h(
           "div",
           {
-            class: `file${state.selected.has(a.filename) ? " selected" : ""}`,
+            class: `file${state.selected.has(j.jobId) ? " selected" : ""}`,
             onclick: (e) => {
               if (e.target.tagName === "A") return;
-              toggle(a.filename);
+              toggle(j.jobId);
             },
           },
-          h("input", { type: "checkbox", checked: state.selected.has(a.filename), "aria-label": a.filename, onclick: (e) => { e.stopPropagation(); toggle(a.filename); } }),
-          b.thumbnail ? h("img", { src: b.thumbnail, alt: "", loading: "lazy" }) : h("div", { class: "noimg" }),
+          h("input", { type: "checkbox", checked: state.selected.has(j.jobId), "aria-label": j.filename || j.itemName, onclick: (e) => { e.stopPropagation(); toggle(j.jobId); } }),
+          j.thumbnail ? h("img", { src: j.thumbnail, alt: "", loading: "lazy" }) : h("div", { class: "noimg" }),
           h(
             "div",
             { class: "grow" },
-            h("div", { class: "title" }, b.itemId ? h("a", { href: `https://booth.pm/ja/items/${b.itemId}`, target: "_blank", text: b.itemName || a.filename }) : a.filename),
-            h("div", { class: "sub", text: b.itemId ? `${a.filename}${b.shopName ? ` · ${b.shopName}` : ""}` : "부스 정보 없음" }),
-            h("div", { class: "chips" }, chips),
+            h("div", { class: "title" }, j.itemId ? h("a", { href: `https://booth.pm/ja/items/${j.itemId}`, target: "_blank", text: j.itemName || j.filename }) : j.filename || j.fileLabel),
+            h("div", { class: "sub", text: `${j.filename || j.fileLabel || ""}${j.shopName ? ` · ${j.shopName}` : ""}` }),
+            h(
+              "div",
+              { class: "chips" },
+              h("span", { class: `chip ${j.state}`, title: j.error || j.tag, text: `${j.projectName || ""} / ${j.tag} · ${STATUS_TEXT[j.state] || j.state}` }),
+              j.error && j.state !== "imported" ? h("span", { class: "muted small-text", text: j.error }) : null,
+            ),
           ),
-        );
-        return row;
-      }),
+        ),
+      ),
     );
   }
-  $("selectAll").checked = assets.length > 0 && assets.every((a) => state.selected.has(a.filename));
+  $("selectAll").checked = jobs.length > 0 && jobs.every((j) => state.selected.has(j.jobId));
   updateActions();
 }
 
-function toggle(filename) {
-  if (state.selected.has(filename)) state.selected.delete(filename);
-  else state.selected.add(filename);
+function toggle(id) {
+  if (state.selected.has(id)) state.selected.delete(id);
+  else state.selected.add(id);
   renderFiles();
 }
 
 function updateActions() {
   const n = state.selected.size;
   $("queueBtn").disabled = !n || !state.project || !state.tag;
-  $("queueBtn").textContent = !state.project ? "1. 프로젝트를 고르세요" : !state.tag ? "2. 태그를 고르세요" : `3 ▶ ${n ? `${n}개 ` : ""}Unity로`;
+  $("queueBtn").textContent = !state.project ? "1. 프로젝트를 고르세요" : !state.tag ? "2. 태그를 고르세요" : `3 ▶ ${n ? `${n}개 ` : ""}다시 보내기`;
   $("hideBtn").disabled = !n;
   $("deleteBtn").disabled = !n;
 }
 
 $("fileFilter").addEventListener("change", renderFiles);
 $("selectAll").addEventListener("change", (e) => {
-  for (const a of filteredAssets()) e.target.checked ? state.selected.add(a.filename) : state.selected.delete(a.filename);
+  for (const j of filteredJobs()) e.target.checked ? state.selected.add(j.jobId) : state.selected.delete(j.jobId);
   renderFiles();
 });
 
 $("queueBtn").addEventListener("click", async () => {
-  const items = [...state.selected].map((filename) => ({ filename, tag: state.tag, project: state.project }));
   $("queueBtn").disabled = true;
   try {
-    const res = await localApi("/api/assets/queue", { method: "POST", body: { items } });
+    const res = await localApi("/api/jobs/resend", { method: "POST", body: { jobIds: [...state.selected], project: state.project, tag: state.tag } });
     const failed = res.filter((r) => r.error);
-    flash(failed.length ? `${failed.length}개 실패: ${failed[0].error}` : `${res.length}개 큐 등록`);
+    flash(failed.length ? `${failed.length}개 실패: ${failed[0].error}` : `${res.length}개 보냄`);
     state.selected.clear();
   } catch (error) {
     flash(error.message);
@@ -205,24 +197,24 @@ $("queueBtn").addEventListener("click", async () => {
   await load();
 });
 $("hideBtn").addEventListener("click", async () => {
-  await localApi("/api/assets/hide", { method: "POST", body: { filenames: [...state.selected] } });
+  await localApi("/api/jobs/hide", { method: "POST", body: { jobIds: [...state.selected] } });
   state.selected.clear();
   load();
 });
 let deleteArmed = null;
 $("deleteBtn").addEventListener("click", async () => {
   if (!deleteArmed) {
-    $("deleteBtn").textContent = "정말 삭제?";
+    $("deleteBtn").textContent = "정말 지울까요?";
     deleteArmed = setTimeout(() => {
       deleteArmed = null;
-      $("deleteBtn").textContent = "삭제";
+      $("deleteBtn").textContent = "기록 삭제";
     }, 3000);
     return;
   }
   clearTimeout(deleteArmed);
   deleteArmed = null;
-  $("deleteBtn").textContent = "삭제";
-  for (const f of state.selected) await localApi(`/api/assets/${encodeURIComponent(f)}`, { method: "DELETE" }).catch(() => {});
+  $("deleteBtn").textContent = "기록 삭제";
+  await localApi("/api/jobs/remove", { method: "POST", body: { jobIds: [...state.selected] } });
   state.selected.clear();
   load();
 });
@@ -233,31 +225,45 @@ function flash(text) {
 }
 
 // ---- 대기열 -----------------------------------------------------------------
-async function renderQueue() {
+function renderQueue() {
   const list = $("queueList");
-  if (!state.online) return;
-  const blocks = [];
-  for (const p of state.projects) {
-    const files = await localApi(`/api/projects/${encodeURIComponent(p.key)}/queue`).catch(() => []);
-    if (!files.length) continue;
-    blocks.push(
-      h(
-        "div",
-        { class: "card qproject" },
-        h("h3", {}, h("span", { class: `dot ${p.running ? "on" : ""}` }), p.name, h("span", { class: "muted", text: p.running ? "실행 중" : "꺼짐 — 유니티를 켜면 임포트" })),
-        files.map((f) =>
-          h(
-            "div",
-            { class: "qfile" },
-            h("span", { class: `chip ${f.failed ? "failed" : "pending"}`, text: f.failed ? "실패" : "대기" }),
-            h("span", { class: "grow ellipsis", title: f.path, text: `${f.tag} / ${f.name}` }),
-            f.failed ? h("button", { class: "btn small", text: "재시도", onclick: async () => { await localApi("/api/queue/retry", { method: "POST", body: { path: f.path } }); load(); } }) : null,
-            h("button", { class: "btn small", text: "취소", onclick: async () => { await localApi("/api/queue/cancel", { method: "POST", body: { path: f.path } }); load(); } }),
-          ),
+  const active = state.jobs.filter((j) => ACTIVE.has(j.state));
+  const groups = new Map();
+  for (const j of active) {
+    if (!groups.has(j.project)) groups.set(j.project, []);
+    groups.get(j.project).push(j);
+  }
+  const blocks = [...groups].map(([key, jobs]) => {
+    const p = state.projects.find((x) => x.key === key);
+    const running = Boolean(p?.running);
+    return h(
+      "div",
+      { class: "card qproject" },
+      h("h3", {}, h("span", { class: `dot ${running ? "on" : ""}` }), p?.name || jobs[0].projectName || key, h("span", { class: "muted", text: running ? "실행 중" : "꺼짐 — 유니티를 켜면 임포트" })),
+      jobs.map((j) =>
+        h(
+          "div",
+          { class: "qfile" },
+          h("span", { class: `chip ${j.state === "importing" ? "queued" : "pending"}`, text: STATUS_TEXT[j.state] }),
+          h("span", { class: "grow ellipsis", title: j.filename, text: `${j.tag} / ${j.filename || j.fileLabel || "받는 중…"}` }),
+          j.state !== "importing"
+            ? h("button", {
+                class: "btn small",
+                text: "취소",
+                onclick: async () => {
+                  try {
+                    await localApi("/api/jobs/cancel", { method: "POST", body: { jobId: j.jobId } });
+                  } catch (error) {
+                    flash(error.message);
+                  }
+                  load();
+                },
+              })
+            : null,
         ),
       ),
     );
-  }
+  });
   list.replaceChildren(...(blocks.length ? blocks : [h("div", { class: "empty", text: "대기 중인 임포트가 없어요" })]));
 }
 
@@ -393,7 +399,7 @@ $("wishApplyBtn").addEventListener("click", async () => {
 
 chrome.runtime.onMessage.addListener((msg) => {
   if (msg.type === "wishlist-progress") wishLog(msg.text);
-  if (msg.type === "download-done" || msg.type === "download-error") load();
+  if (msg.type === "download-done" || msg.type === "download-error" || msg.type === "download-failed") load();
 });
 
 // ---- 탭 / 공통 --------------------------------------------------------------
@@ -417,7 +423,7 @@ $("themeBtn").addEventListener("click", async () => {
   syncThemeBtn();
 });
 syncThemeBtn();
-$("retryBtn").addEventListener("click", load);
+$("retryBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("manage.html#projects") }));
 $("manageBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") }));
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.configVersion) load();
@@ -425,4 +431,4 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
 loadWishRules();
 load();
-setInterval(() => document.visibilityState === "visible" && load().catch(() => {}), 10000);
+setInterval(() => document.visibilityState === "visible" && load().catch(() => {}), 5000);

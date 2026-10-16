@@ -1,4 +1,6 @@
-import { DEFAULT_PORT, getPort, localApi, ping } from "../lib/local.js";
+import { localApi, ping } from "../lib/local.js";
+
+const VPM_INDEX = "https://raw.githubusercontent.com/Luin48/Booth-Import-Manager/main/vpm/index.json";
 
 const $ = (id) => document.getElementById(id);
 const h = (tag, attrs = {}, ...children) => {
@@ -33,12 +35,18 @@ function fail(error) {
 }
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : `t${Date.now()}${Math.random().toString(16).slice(2)}`);
 
-async function load() {
+function renderConn(unities) {
+  const n = unities.length;
+  $("connDot").className = `dot ${n ? "on" : "off"}`;
+  $("connText").textContent = n ? `유니티 ${n}개 연결됨 (${unities.map((u) => u.name).join(", ")})` : "켜진 유니티 없음";
+  $("offline").classList.toggle("hidden", n > 0);
+  state.unities = unities;
+}
+
+async function load({ scan = false } = {}) {
   const alive = await ping();
-  $("connDot").className = `dot ${alive.ok ? "on" : "off"}`;
-  $("connText").textContent = alive.ok ? `로컬 앱 연결됨 (v${alive.version})` : "로컬 앱 꺼짐";
-  $("offline").classList.toggle("hidden", alive.ok);
-  if (!alive.ok) return;
+  renderConn(alive.unities);
+  if (scan && alive.unities.length) await localApi("/api/projects/scan", { method: "POST" }).catch(fail);
   const [config, projects] = await Promise.all([localApi("/api/config"), localApi("/api/projects?all=1")]);
   state.config = config;
   state.projects = projects;
@@ -83,7 +91,11 @@ async function saveProjects(updates) {
 }
 
 async function pickFolder(initial = "") {
-  $("saveState").textContent = "PC에 뜬 폴더 선택 창을 확인하세요…";
+  if (!state.unities?.length) {
+    fail(new Error("폴더 선택 창은 유니티가 띄워요. 유니티를 하나 켜거나 경로를 직접 입력하세요"));
+    return "";
+  }
+  $("saveState").textContent = "유니티 창 위에 뜬 폴더 선택 창을 확인하세요…";
   try {
     const res = await localApi("/api/pick-folder", { method: "POST", body: { initial }, timeoutMs: 600000 });
     $("saveState").textContent = "";
@@ -106,7 +118,7 @@ function renderRoots() {
             { class: "root-row" },
             h("span", { class: "grow ellipsis", title: root, text: root }),
             h("span", { class: "chip", text: `프로젝트 ${count}개` }),
-            h("button", { class: "btn small", text: "제거", onclick: () => saveConfig({ projectRoots: roots.filter((r) => r !== root) }).then(load) }),
+            h("button", { class: "btn small", text: "제거", onclick: () => saveConfig({ projectRoots: roots.filter((r) => r !== root) }).then(() => load({ scan: true })) }),
           );
         })
       : [h("div", { class: "muted", text: "아직 등록된 폴더가 없어요." })]),
@@ -114,7 +126,7 @@ function renderRoots() {
   const extras = state.config.extraProjects || [];
   $("extraList").replaceChildren(
     ...extras.map((p) =>
-      h("div", { class: "extra-row" }, h("span", { class: "grow ellipsis", text: p }), h("button", { class: "btn small", text: "제거", onclick: () => saveConfig({ extraProjects: extras.filter((x) => x !== p) }).then(load) })),
+      h("div", { class: "extra-row" }, h("span", { class: "grow ellipsis", text: p }), h("button", { class: "btn small", text: "제거", onclick: () => saveConfig({ extraProjects: extras.filter((x) => x !== p) }).then(() => load({ scan: true })) })),
     ),
   );
   const fresh = state.suggestions.filter((s) => !roots.some((r) => r.toLowerCase() === s.path.toLowerCase()));
@@ -133,7 +145,8 @@ async function addRoot(path) {
   if (roots.some((r) => r.toLowerCase() === path.toLowerCase())) return;
   await saveConfig({ projectRoots: [...roots, path] });
   $("rootInput").value = "";
-  load();
+  if (!state.unities?.length) saved("등록됨 — 유니티를 하나 켜면 안의 프로젝트를 찾아요");
+  load({ scan: true });
 }
 $("rootAddBtn").addEventListener("click", () => addRoot($("rootInput").value));
 $("rootInput").addEventListener("keydown", (e) => e.key === "Enter" && addRoot($("rootInput").value));
@@ -167,44 +180,34 @@ function packageCell(p) {
       saved(
         res.mode === "migrated"
           ? `${p.name}: Assets 안의 예전 복사본을 지우고 Packages로 옮겼어요${ver}`
-          : `${p.name}: 설치됨${ver}${p.running ? " — 유니티가 곧 다시 컴파일해요" : " — 다음에 유니티를 켜면 적용돼요"}`,
+          : `${p.name}: 설치됨${ver}${p.openWithoutPackage ? " — 열려 있는 유니티가 곧 다시 컴파일해요" : " — 다음에 유니티를 켜면 적용돼요"}`,
       );
-      await load();
+      setTimeout(() => load({ scan: true }), 800);
     } catch (error) {
       fail(error);
       btn.disabled = false;
       btn.textContent = "다시 시도";
     }
   };
+  const canInstall = state.unities?.length > 0;
   const latest = p.latestVersion || "";
+  const btn = (text, primary) =>
+    h("button", {
+      class: `btn small${primary ? " primary" : ""}`,
+      text,
+      disabled: !canInstall,
+      title: canInstall ? "켜져 있는 유니티의 BIM 패키지를 이 프로젝트에 복사해요" : "다른 프로젝트에 설치하려면 BIM이 설치된 유니티를 하나 켜 두세요 (또는 ALCOM에서 추가)",
+      onclick: (e) => install(e.target),
+    });
   if (p.installed === "packages") {
-    const cur = p.installedVersion || p.packageVersion || "";
-    const outdated = latest && cur && cur !== latest;
-    return h(
-      "div",
-      { class: "row wrap" },
-      h("span", { class: `chip ${outdated ? "warn" : "ok"}`, text: cur ? `설치됨 v${cur}` : "설치됨" }),
-      h("button", {
-        class: `btn small${outdated ? " primary" : ""}`,
-        text: outdated ? `v${latest}로 업데이트` : "재설치",
-        onclick: (e) => install(e.target),
-      }),
-    );
+    const cur = p.installedVersion || "";
+    const outdated = latest && cur && cur !== latest && !p.running;
+    return h("div", { class: "row wrap" }, h("span", { class: `chip ${outdated ? "warn" : "ok"}`, text: cur ? `설치됨 v${cur}` : "설치됨" }), outdated ? btn(`v${latest}로 업데이트`, true) : null);
   }
   if (p.installed?.startsWith("assets:")) {
-    return h(
-      "div",
-      { class: "row wrap" },
-      h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (예전 방식)" }),
-      h("button", {
-        class: "btn small primary",
-        title: "Assets 안의 예전 복사본을 지우고 Packages 폴더에 새로 설치해요",
-        text: latest ? `v${latest}로 업데이트` : "업데이트",
-        onclick: (e) => install(e.target),
-      }),
-    );
+    return h("div", { class: "row wrap" }, h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (예전 방식)" }), btn(latest ? `v${latest}로 업데이트` : "업데이트", true));
   }
-  return h("button", { class: "btn small primary", text: latest ? `설치 (v${latest})` : "설치", onclick: (e) => install(e.target) });
+  return btn(latest ? `설치 (v${latest})` : "설치", true);
 }
 
 function renderProjects() {
@@ -232,7 +235,10 @@ function renderProjects() {
               "td",
               {},
               h("div", { class: "row wrap" },
-                h("span", { class: `chip ${p.running ? "ok" : ""}`, text: p.running ? "● 실행 중" : "○ 꺼짐" }),
+                h("span", {
+                  class: `chip ${p.running ? "ok" : p.openWithoutPackage ? "warn" : ""}`,
+                  text: p.running ? "● 실행 중" : p.openWithoutPackage ? "● 열림 (패키지 없음)" : p.missing ? "○ 폴더 확인 필요" : "○ 꺼짐",
+                }),
                 p.pending ? h("span", { class: "chip pending", text: `대기 ${p.pending}` }) : null,
                 p.failed ? h("span", { class: "chip failed", text: `실패 ${p.failed}` }) : null,
               ),
@@ -713,49 +719,59 @@ function renderMatrix() {
 // ---- 설정 -------------------------------------------------------------------
 async function renderSettings() {
   const c = state.config;
-  $("downloadFolder").value = c.downloadFolder || "";
-  $("intakeFolder").value = c.intakeFolder || "";
-  $("queueFolder").value = c.queueFolder || "";
-  $("autoQueue").checked = c.autoQueue !== false;
-  $("deleteLocal").checked = Boolean(c.deleteLocalAfterQueue);
-  $("stayRunning").checked = c.stayRunning !== false;
-  $("port").value = await getPort();
+  $("downloadsDir").value = c.downloadsDir || "";
+  $("downloadsDir").placeholder = "아직 몰라요 — [Unity로]로 처음 받으면 자동으로 채워져요";
+  $("queueRoot").textContent = c.queueRoot ? `${c.queueRoot}\\대기열` : "다운로드 폴더\\BoothImportManager\\대기열";
+  $("archiveDir").value = c.archiveDir || "";
+  $("archiveDir").placeholder = c.queueRoot ? `${c.queueRoot}\\보관 (기본)` : "다운로드 폴더\\BoothImportManager\\보관 (기본)";
+  $("keepArchive").checked = c.keepArchive !== false;
   const { boothTheme } = await chrome.storage.local.get("boothTheme");
   $("boothTheme").value = boothTheme === "dark" ? "dark" : "light";
+  $("vpmUrl").value = VPM_INDEX;
 }
 $("boothTheme").addEventListener("change", async (e) => {
   await chrome.storage.local.set({ boothTheme: e.target.value });
   saved(e.target.value === "dark" ? "부스 다크 테마 적용됨" : "부스 라이트 테마 적용됨");
 });
-document.querySelectorAll(".pick").forEach((btn) =>
-  btn.addEventListener("click", async () => {
-    const input = $(btn.dataset.target);
-    const path = await pickFolder(input.value);
-    if (path) input.value = path;
-  }),
-);
+$("archivePickBtn").addEventListener("click", async () => {
+  const path = await pickFolder($("archiveDir").value);
+  if (path) $("archiveDir").value = path;
+});
+$("archiveOpenBtn").addEventListener("click", () => {
+  const c = state.config;
+  const path = $("archiveDir").value.trim() || (c.queueRoot ? `${c.queueRoot}\\보관` : "");
+  if (!path) return fail(new Error("아직 다운로드 폴더를 몰라요"));
+  localApi("/api/reveal", { method: "POST", body: { path } }).catch(fail);
+});
+$("queueOpenBtn").addEventListener("click", () => {
+  const c = state.config;
+  if (!c.queueRoot) return fail(new Error("아직 다운로드 폴더를 몰라요"));
+  localApi("/api/reveal", { method: "POST", body: { path: `${c.queueRoot}\\대기열` } }).catch(fail);
+});
 $("saveSettingsBtn").addEventListener("click", async () => {
-  const port = Number($("port").value) || DEFAULT_PORT;
-  const portChanged = port !== (await getPort());
-  await saveConfig({
-    downloadFolder: $("downloadFolder").value.trim(),
-    intakeFolder: $("intakeFolder").value.trim(),
-    queueFolder: $("queueFolder").value.trim(),
-    autoQueue: $("autoQueue").checked,
-    deleteLocalAfterQueue: $("deleteLocal").checked,
-    stayRunning: $("stayRunning").checked,
-    port,
-  });
-  if (portChanged) {
-    await chrome.storage.local.set({ localPort: port });
-    saved("포트 변경됨 — 로컬 앱을 다시 실행하세요");
+  await saveConfig({ archiveDir: $("archiveDir").value.trim(), keepArchive: $("keepArchive").checked });
+  saved(state.unities?.length ? "저장됨 (유니티에도 반영)" : "저장됨 — 유니티를 켜면 반영돼요");
+});
+$("importV03Btn").addEventListener("click", async () => {
+  $("importV03Btn").disabled = true;
+  try {
+    const res = await localApi("/api/import-v03", { method: "POST", body: {} });
+    saved(`가져옴: 태그 ${res.tags}개, 세트 ${res.tagSets}개, 프로젝트 ${res.projects}개`);
+    await load();
+  } catch (error) {
+    fail(error);
+  } finally {
+    $("importV03Btn").disabled = false;
   }
 });
-$("reloadExtBtn").addEventListener("click", () => chrome.runtime.reload());
-$("quitBtn").addEventListener("click", async () => {
-  await localApi("/api/shutdown", { method: "POST", body: { reason: "user" } }).catch(() => {});
-  setTimeout(load, 800);
+$("vpmAddBtn").addEventListener("click", () => {
+  window.open(`vcc://vpm/addRepo?url=${encodeURIComponent(VPM_INDEX)}`, "_self");
 });
+$("vpmCopyBtn").addEventListener("click", async () => {
+  await navigator.clipboard.writeText(VPM_INDEX).catch(() => {});
+  saved("저장소 주소 복사됨");
+});
+$("reloadExtBtn").addEventListener("click", () => chrome.runtime.reload());
 
 // ---- 탭 ---------------------------------------------------------------------
 function showTab(name) {
@@ -764,10 +780,10 @@ function showTab(name) {
   history.replaceState(null, "", `#${name}`);
 }
 document.querySelectorAll(".m-tabs button").forEach((b) => b.addEventListener("click", () => showTab(b.dataset.tab)));
-$("retryBtn").addEventListener("click", load);
+$("retryBtn").addEventListener("click", () => load({ scan: true }));
 
 showTab((location.hash || "#projects").slice(1).replace(/[^a-z]/g, "") || "projects");
-load()
+load({ scan: true })
   .then(async () => {
     if (!state.config) return;
     state.suggestions = await localApi("/api/projects/suggest").catch(() => []);
@@ -778,8 +794,12 @@ setInterval(async () => {
   // 실행 중/대기 상태만 가볍게 갱신 (입력 중이면 건너뜀)
   if (document.visibilityState !== "visible" || ["INPUT", "SELECT", "TEXTAREA"].includes(document.activeElement?.tagName)) return;
   try {
+    const alive = await ping();
+    const before = (state.unities || []).map((u) => u.key).join();
+    renderConn(alive.unities);
     state.projects = await localApi("/api/projects?all=1");
     renderProjects();
+    if (before !== alive.unities.map((u) => u.key).join()) renderSettings();
   } catch {
     /* 꺼짐 */
   }

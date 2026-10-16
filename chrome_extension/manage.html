@@ -28,7 +28,7 @@
 
     <main>
       <div id="offline" class="card notice hidden">
-        <strong>로컬 앱이 꺼져 있어요.</strong> BoothImportManager.exe를 실행한 뒤 <button id="retryBtn" class="btn small">다시 연결</button>
+        <strong>켜진 유니티가 없어요.</strong> 태그 정리는 그대로 할 수 있어요. 프로젝트 목록 갱신·패키지 설치·폴더 선택은 BIM 패키지가 설치된 유니티 프로젝트를 하나 켜면 돼요. <button id="retryBtn" class="btn small">다시 확인</button>
       </div>
 
       <!-- 프로젝트 -->
@@ -126,15 +126,19 @@
       <section id="tab-settings" class="tab hidden">
         <div class="card block form">
           <h2>폴더</h2>
-          <label>Chrome 다운로드 폴더 <span class="muted">(크롬 설정의 다운로드 위치와 같아야 해요)</span>
-            <div class="row"><input id="downloadFolder" type="text" class="grow" /><button class="btn pick" data-target="downloadFolder">선택…</button></div>
+          <p class="muted">v0.4부터는 따로 실행하는 프로그램(exe)이 없어요. [Unity로]를 누르면 크롬이 아래 대기열 폴더에 바로 저장하고, 유니티가 거기서 가져가 임포트해요.</p>
+          <label>크롬 다운로드 폴더 <span class="muted">(자동으로 알아내요)</span>
+            <div class="row"><input id="downloadsDir" type="text" class="grow" readonly /></div>
           </label>
-          <label>보관 폴더 <span class="muted">(받은 파일을 모아두는 곳, 프로젝트별 큐는 이 안의 _projects)</span>
-            <div class="row"><input id="intakeFolder" type="text" class="grow" /><button class="btn pick" data-target="intakeFolder">선택…</button></div>
+          <label>대기열 <span class="muted">(프로젝트별 하위 폴더)</span>
+            <div class="row"><code id="queueRoot" class="grow ellipsis"></code><button id="queueOpenBtn" class="btn">열기</button></div>
           </label>
-          <label>공용 큐 폴더 <span class="muted">(v0.2 방식, 프로젝트를 안 고르고 보낼 때)</span>
-            <div class="row"><input id="queueFolder" type="text" class="grow" /><button class="btn pick" data-target="queueFolder">선택…</button></div>
+          <label>보관 폴더 <span class="muted">(임포트가 끝난 원본 zip을 모아두는 곳 — 비우면 기본 위치)</span>
+            <div class="row"><input id="archiveDir" type="text" class="grow" /><button id="archivePickBtn" class="btn">선택…</button><button id="archiveOpenBtn" class="btn">열기</button></div>
           </label>
+          <label class="check"><input id="keepArchive" type="checkbox" /> 임포트 후 원본을 보관 폴더로 옮기기 (끄면 삭제 — 다른 프로젝트로 다시 보낼 때 새로 받아요)</label>
+          <div class="row wrap"><button id="saveSettingsBtn" class="btn primary">설정 저장</button></div>
+
           <h2>부스 테마</h2>
           <label>부스 사이트 화면 <span class="muted">(바꾸면 열려 있는 부스 탭에도 바로 적용 — 다른 다크 모드 확장은 꺼 주세요)</span>
             <div class="row">
@@ -144,17 +148,20 @@
               </select>
             </div>
           </label>
-          <h2>동작</h2>
-          <label class="check"><input id="autoQueue" type="checkbox" /> 'Unity로' 버튼: 다운로드가 끝나면 바로 큐에 넣기</label>
-          <label class="check"><input id="deleteLocal" type="checkbox" /> 큐에 넣은 뒤 보관 폴더의 원본 삭제</label>
-          <label class="check"><input id="stayRunning" type="checkbox" /> 앱 웹 화면을 닫아도 앱 계속 실행</label>
-          <label>로컬 앱 포트 <span class="muted">(보통 7831)</span>
-            <div class="row"><input id="port" type="number" min="1024" max="65535" style="width: 120px" /></div>
-          </label>
+
+          <h2>유니티 패키지 (ALCOM / VCC)</h2>
+          <p class="muted">ALCOM에 저장소를 추가하면 프로젝트의 패키지 목록에서 "Booth Import Manager"를 추가·업데이트할 수 있어요.</p>
           <div class="row wrap">
-            <button id="saveSettingsBtn" class="btn primary">설정 저장</button>
+            <input id="vpmUrl" type="text" class="grow" readonly />
+            <button id="vpmCopyBtn" class="btn">주소 복사</button>
+            <button id="vpmAddBtn" class="btn primary">ALCOM에 추가</button>
+          </div>
+
+          <h2>v0.3에서 옮기기</h2>
+          <p class="muted">예전 로컬 앱(BoothImportManager.exe)을 실행한 상태에서 누르면 태그·태그 세트·프로젝트 폴더·프로젝트별 설정을 가져와요. 다 옮긴 뒤에는 exe를 꺼도 돼요.</p>
+          <div class="row wrap">
+            <button id="importV03Btn" class="btn">v0.3 설정 가져오기</button>
             <button id="reloadExtBtn" class="btn" title="확장 폴더의 파일을 새 버전으로 바꾼 뒤 누르세요">크롬 확장 다시 불러오기</button>
-            <button id="quitBtn" class="btn danger">로컬 앱 종료</button>
           </div>
         </div>
       </section>

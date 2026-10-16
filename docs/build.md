@@ -1,20 +1,26 @@
-# 빌드
+# 빌드 / 릴리즈
+
+v0.4부터는 exe가 없습니다. 릴리즈 파일은 전부 파이썬 스크립트로 만듭니다.
 
 ## 자동 (GitHub Actions)
 
-저장소 **Actions → Build & Release → Run workflow** 에 버전(예: `0.3.1`)을 넣고 실행하면
-윈도우에서 exe를 빌드하고, 크롬 확장 zip·유니티 패키지와 함께 릴리즈를 만듭니다.
-릴리즈 본문은 `docs/release-notes-v<버전>.md` 를 씁니다. (먼저 만들어 두어야 함)
+1. 버전 맞추기: `chrome_extension/manifest.json`, `unity_package/BoothImportManager/package.json`,
+   `Editor/BimContext.cs`의 `Version`
+2. `python scripts/make_vpm.py index` → `vpm/index.json`에 새 버전 추가 (커밋)
+3. `docs/release-notes-v<버전>.md` 작성
+4. **Actions → Build & Release → Run workflow** 에 버전 입력
+
+만들어지는 파일:
+
+| 파일 | 용도 |
+| --- | --- |
+| `BoothImportManager-ChromeExtension-v<버전>.zip` | 크롬 확장 |
+| `BoothImportManager-Unity-v<버전>.unitypackage` | 유니티 패키지 (Assets 안에 설치) |
+| `local.booth-import-manager-<버전>.zip` | ALCOM/VCC 저장소용 패키지 |
 
 ## 직접
 
-- Windows, Python 3.12+
-
-```powershell
-python -m pip install pyinstaller pillow pystray
-.\scripts\build-exe.ps1                       # dist\BoothImportManager.exe
-python scripts\make_unitypackage.py           # dist\BoothImportManager.unitypackage
+```bash
+python scripts/make_unitypackage.py dist/BoothImportManager.unitypackage
+python scripts/make_vpm.py zip dist/local.booth-import-manager.zip
 ```
-
-빌드 없이 실행: `.\scripts\run-dev.ps1`
-시작프로그램 등록: `.\scripts\install-startup.ps1` (해제: `-Remove`)

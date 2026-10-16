@@ -1,16 +1,17 @@
 name: Build & Release
 
 # v*.*.* 태그를 푸시하거나, Actions 탭 → "Build & Release" → Run workflow 로 실행하면
-# 윈도우에서 exe 를 빌드하고, 크롬 확장 zip / 유니티 패키지와 함께 릴리즈를 만든다.
+# 크롬 확장 zip, 유니티 패키지(.unitypackage), ALCOM/VCC 용 패키지 zip 으로 릴리즈를 만든다.
+# v0.4 부터는 exe 가 없다.
 on:
   push:
     tags: ["v*.*.*"]
   workflow_dispatch:
     inputs:
       version:
-        description: "버전 (예: 0.3.0)"
+        description: "버전 (예: 0.4.0)"
         required: true
-        default: "0.3.3"
+        default: "0.4.0"
       prerelease:
         description: "프리릴리즈로 올리기"
         type: boolean
@@ -21,9 +22,8 @@ permissions:
 
 jobs:
   build:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     env:
-      # 태그 푸시면 태그에서(v 빼고), 수동 실행이면 입력값에서
       VERSION: ${{ github.event_name == 'push' && github.ref_name || inputs.version }}
     steps:
       - uses: actions/checkout@v4
@@ -32,42 +32,34 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install PyInstaller
-        run: python -m pip install --upgrade pip pyinstaller pillow pystray
-
-      - name: Syntax check
-        run: python -m compileall -q local_app
-
-      - name: Build exe
-        shell: pwsh
-        run: ./scripts/build-exe.ps1
+      - name: Check versions
+        run: |
+          v="${VERSION#v}"
+          ext=$(python -c "import json;print(json.load(open('chrome_extension/manifest.json'))['version'])")
+          pkg=$(python -c "import json;print(json.load(open('unity_package/BoothImportManager/package.json'))['version'])")
+          echo "release=$v extension=$ext unity=$pkg"
+          test "$ext" = "$v" && test "$pkg" = "$v"
+          test -f "docs/release-notes-v$v.md"
 
       - name: Package release files
-        shell: pwsh
         run: |
-          $v = $env:VERSION.TrimStart("v")
-          New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item dist/BoothImportManager.exe "release/BoothImportManager-v$v.exe"
-          Compress-Archive -Path chrome_extension/* -DestinationPath "release/BoothImportManager-ChromeExtension-v$v.zip" -Force
+          v="${VERSION#v}"
+          mkdir -p release
+          (cd chrome_extension && zip -qr "../release/BoothImportManager-ChromeExtension-v$v.zip" .)
           python scripts/make_unitypackage.py "release/BoothImportManager-Unity-v$v.unitypackage"
-          Get-ChildItem release | Format-Table Name, Length
+          python scripts/make_vpm.py zip "release/local.booth-import-manager-$v.zip"
+          ls -l release
 
       - name: Create GitHub release
-        shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          $v = $env:VERSION.TrimStart("v")
-          $flags = @()
-          if ("${{ inputs.prerelease }}" -eq "true") { $flags += "--prerelease" }
-          gh release view "v$v" 2>$null
-          if ($LASTEXITCODE -eq 0) {
-            # 태그 푸시로 이미 있으면 파일과 본문만 갱신
-            gh release upload "v$v" (Get-ChildItem release/*).FullName --clobber
+          v="${VERSION#v}"
+          flags=""
+          if [ "${{ inputs.prerelease }}" = "true" ]; then flags="--prerelease"; fi
+          if gh release view "v$v" >/dev/null 2>&1; then
+            gh release upload "v$v" release/* --clobber
             gh release edit "v$v" --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md"
-            exit 0
-          }
-          gh release create "v$v" (Get-ChildItem release/*).FullName `
-            --title "Booth Import Manager v$v" `
-            --notes-file "docs/release-notes-v$v.md" `
-            --target $env:GITHUB_SHA @flags
+          else
+            gh release create "v$v" release/* --title "Booth Import Manager v$v" --notes-file "docs/release-notes-v$v.md" --target "$GITHUB_SHA" $flags
+          fi

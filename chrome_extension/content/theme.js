@@ -11,7 +11,7 @@
   const ROOT = document.documentElement;
   const FLAG_KEY = "bim-booth-theme"; // 페이지 localStorage: 첫 페인트 전에 동기적으로 읽기용
   const CACHE_PREFIX = "darkcss:";
-  const CACHE_VERSION = "v2";
+  const CACHE_VERSION = "v3";
   const BG = "#141414";
 
   // ---- 색 계산 -------------------------------------------------------------
@@ -168,11 +168,21 @@
       .join(", ");
   }
 
-  function convertRules(rules, out) {
+  // 다른 변수를 가리키는 변수(--text-default: var(--gray-900))는 따로 모아 두었다가
+  // 끝까지 따라가 원래 색을 찾고, '가리키는 쪽' 이름(text/border/…)에 맞게 바꾼다.
+  const rawVars = new Map();
+
+  function convertRules(rules, out, vars) {
     for (const rule of rules) {
       if (rule.type === CSSRule.STYLE_RULE) {
         const decls = [];
         const st = rule.style;
+        if (vars) {
+          for (let i = 0; i < st.length; i += 1) {
+            const name = st[i];
+            if (name.startsWith("--") && !name.startsWith("--tw-")) vars[name] = st.getPropertyValue(name).trim();
+          }
+        }
         for (const [prop, mapper] of PROPS) {
           const v = st.getPropertyValue(prop);
           if (!v) continue;
@@ -189,7 +199,7 @@
         if (decls.length) out.push(`${scopeSelector(rule.selectorText)} { ${decls.join("; ")} }`);
       } else if (rule.cssRules && (rule.type === CSSRule.MEDIA_RULE || rule.type === CSSRule.SUPPORTS_RULE || (window.CSSLayerBlockRule && rule instanceof CSSLayerBlockRule))) {
         const inner = [];
-        convertRules(rule.cssRules, inner);
+        convertRules(rule.cssRules, inner, vars);
         if (inner.length) out.push(`${rule.cssText.slice(0, rule.cssText.indexOf("{"))}{ ${inner.join("\n")} }`);
       }
     }
@@ -200,11 +210,40 @@
       const sheet = new CSSStyleSheet();
       sheet.replaceSync(text.replace(/@import[^;]+;/g, ""));
       const out = [];
-      convertRules(sheet.cssRules, out);
-      return out.join("\n");
+      const vars = {};
+      convertRules(sheet.cssRules, out, vars);
+      return { css: out.join("\n"), vars };
     } catch {
-      return "";
+      return { css: "", vars: {} };
     }
+  }
+
+  function addVars(vars) {
+    for (const [k, v] of Object.entries(vars || {})) rawVars.set(k, v);
+  }
+
+  function resolveVar(value, depth = 0) {
+    if (depth > 8 || !value) return "";
+    return value.replace(/var\(\s*(--[\w-]+)\s*(?:,\s*([^()]*(?:\([^()]*\))?[^()]*))?\)/g, (_, name, fallback) => {
+      const raw = rawVars.get(name);
+      if (raw != null) return resolveVar(raw, depth + 1);
+      return fallback ? resolveVar(fallback.trim(), depth + 1) : "";
+    });
+  }
+
+  function aliasCss() {
+    const decls = [];
+    for (const [name, raw] of rawVars) {
+      if (!/var\(/.test(raw)) continue;
+      const literal = resolveVar(raw).trim();
+      if (!literal || /var\(/.test(literal)) continue;
+      const c = parseColor(literal);
+      if (!c) continue;
+      const mapped = mapperForVar(name)(c);
+      if (mapped) decls.push(`${name}: ${mapped} !important`);
+    }
+    // :root 까지 붙여 일반 변환 규칙보다 우선
+    return decls.length ? `html.bim-site-dark:root { ${decls.join("; ")} }` : "";
   }
 
   // ---- 기본 스타일 (모든 부스 페이지 공통) --------------------------------------
@@ -306,8 +345,10 @@ html.bim-site-dark ::-webkit-scrollbar-thumb { background: #3d3d3d; border-radiu
         if (sheetRuleCount.get(src.sheet) === src.count) continue;
         sheetRuleCount.set(src.sheet, src.count);
         const out = [];
+        const vars = {};
         try {
-          convertRules(src.sheet.cssRules, out);
+          convertRules(src.sheet.cssRules, out, vars);
+          addVars(vars);
         } catch {
           /* 무시 */
         }
@@ -324,19 +365,24 @@ html.bim-site-dark ::-webkit-scrollbar-thumb { background: #3d3d3d; border-radiu
         for (const src of remote) {
           done.add(src.key);
           const ck = CACHE_PREFIX + CACHE_VERSION + src.key;
-          let css = cached[ck];
-          if (css == null) {
+          let entry = cached[ck];
+          if (entry == null || typeof entry !== "object") {
             let text = "";
             try {
               text = await fetch(src.href, { credentials: "omit" }).then((r) => (r.ok ? r.text() : ""));
             } catch {
               text = "";
             }
-            css = convertCssText(text);
-            if (css) chrome.storage.local.set({ [ck]: css }).catch(() => {});
+            entry = convertCssText(text);
+            if (entry.css || Object.keys(entry.vars).length) chrome.storage.local.set({ [ck]: entry }).catch(() => {});
           }
-          if (css && enabled) putStyle(src.key, css);
+          addVars(entry.vars);
+          if (entry.css && enabled) putStyle(src.key, entry.css);
         }
+      }
+      if (enabled) {
+        const alias = aliasCss();
+        if (alias) putStyle("~alias", alias);
       }
     } finally {
       converting = false;
