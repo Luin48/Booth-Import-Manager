@@ -1,8 +1,32 @@
 import * as core from "./lib/core.js";
 import { classifyPurchase, pageApplyWishlist, pageCollectLibrary, pageFetchItems, slimItem } from "./lib/booth.js";
 
-// 아이콘 클릭 → 사이드패널
-chrome.sidePanel?.setPanelBehavior?.({ openPanelOnActionClick: true }).catch(() => {});
+// ---- 사이드패널: 부스 페이지에서만 ---------------------------------------------
+const isBoothTab = (url) => /^https:\/\/([\w-]+\.)?booth\.pm(\/|$)/.test(url || "");
+
+function syncPanel(tabId, url) {
+  const options = isBoothTab(url) ? { tabId, path: "sidepanel.html", enabled: true } : { tabId, enabled: false };
+  return chrome.sidePanel.setOptions(options).catch(() => {});
+}
+
+chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {});
+chrome.sidePanel.setOptions({ enabled: false }).catch(() => {}); // 기본은 꺼 두고 부스 탭만 켠다
+chrome.tabs.onUpdated.addListener((tabId, info, tab) => {
+  if (info.url || info.status === "loading") syncPanel(tabId, tab.url);
+});
+async function syncAllTabs() {
+  for (const tab of await chrome.tabs.query({})) await syncPanel(tab.id, tab.url);
+}
+chrome.runtime.onStartup.addListener(() => syncAllTabs().catch(() => {}));
+
+// 아이콘: 부스 페이지면 사이드패널, 아니면 관리 페이지
+chrome.action.onClicked.addListener((tab) => {
+  if (isBoothTab(tab.url)) {
+    chrome.sidePanel.open({ tabId: tab.id }).catch(() => {});
+  } else {
+    chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") });
+  }
+});
 
 // ---- 다운로드 → 대기열 (lib/core.js) -------------------------------------------
 chrome.downloads.onDeterminingFilename.addListener((item, suggest) => core.onDeterminingFilename(item, suggest));
@@ -149,7 +173,7 @@ async function handle(msg, sender) {
       await chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") + (msg.hash || "") });
       return true;
     case "openPanel":
-      if (sender.tab?.windowId) await chrome.sidePanel.open({ windowId: sender.tab.windowId });
+      if (sender.tab?.id) await chrome.sidePanel.open({ tabId: sender.tab.id });
       return true;
     default:
       throw new Error(`unknown message ${msg.type}`);
@@ -165,7 +189,5 @@ chrome.runtime.onInstalled.addListener(async () => {
   } catch {
     /* ignore */
   }
-  // v0.3(exe) 를 쓰고 있었다면 태그·프로젝트 설정을 한 번 가져온다
-  core.autoMigrate().catch(() => {});
+  syncAllTabs().catch(() => {});
 });
-chrome.runtime.onStartup.addListener(() => core.autoMigrate().catch(() => {}));

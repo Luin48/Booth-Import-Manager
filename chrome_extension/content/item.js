@@ -105,7 +105,7 @@
               onGo: async (choice) => {
                 try {
                   await send("unity", { url: f.url, ...choice, autoQueue: true, booth: { ...info, downloadableId, fileLabel: f.name } });
-                  toast(choice.project === window.BIM.NO_PROJECT ? `다운로드 폴더로 받는 중: ${f.name}` : `다운로드 시작: ${f.name}`);
+                  toast(`다운로드 시작: ${f.name}`);
                 } catch (error) {
                   toast(error.message, "error");
                 }

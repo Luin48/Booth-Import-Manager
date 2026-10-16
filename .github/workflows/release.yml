@@ -9,9 +9,9 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: "버전 (예: 0.4.0)"
+        description: "버전 (예: 1.0.0)"
         required: true
-        default: "0.4.0"
+        default: "1.0.0"
       prerelease:
         description: "프리릴리즈로 올리기"
         type: boolean

@@ -65,7 +65,7 @@
                 <tr>
                   <th>프로젝트</th>
                   <th>상태</th>
-                  <th>유니티 패키지</th>
+                  <th>BIM 패키지</th>
                   <th>임포트 위치 (Asset root)</th>
                   <th>목록</th>
                 </tr>
@@ -74,6 +74,15 @@
             </table>
           </div>
           <p class="muted">유니티 패키지가 설치된 프로젝트는, 꺼져 있을 때 보낸 임포트도 다음에 켜면 자동으로 처리해요.</p>
+        </div>
+        <div class="card block">
+          <h2>유니티 패키지 (ALCOM / VCC)</h2>
+          <p class="muted">ALCOM(또는 VCC)에 아래 저장소를 한 번 추가하면, 프로젝트마다 패키지 목록에서 <b>Booth Import Manager</b>를 추가하고 업데이트할 수 있어요.</p>
+          <div class="row wrap">
+            <input id="vpmUrl" type="text" class="grow" readonly />
+            <button id="vpmCopyBtn" class="btn">주소 복사</button>
+            <button id="vpmAddBtn" class="btn primary">ALCOM에 추가</button>
+          </div>
         </div>
       </section>
 
@@ -149,18 +158,8 @@
             </div>
           </label>
 
-          <h2>유니티 패키지 (ALCOM / VCC)</h2>
-          <p class="muted">ALCOM에 저장소를 추가하면 프로젝트의 패키지 목록에서 "Booth Import Manager"를 추가·업데이트할 수 있어요.</p>
+          <h2>기타</h2>
           <div class="row wrap">
-            <input id="vpmUrl" type="text" class="grow" readonly />
-            <button id="vpmCopyBtn" class="btn">주소 복사</button>
-            <button id="vpmAddBtn" class="btn primary">ALCOM에 추가</button>
-          </div>
-
-          <h2>v0.3에서 옮기기</h2>
-          <p class="muted">예전 로컬 앱(BoothImportManager.exe)을 실행한 상태에서 누르면 태그·태그 세트·프로젝트 폴더·프로젝트별 설정을 가져와요. 다 옮긴 뒤에는 exe를 꺼도 돼요.</p>
-          <div class="row wrap">
-            <button id="importV03Btn" class="btn">v0.3 설정 가져오기</button>
             <button id="reloadExtBtn" class="btn" title="확장 폴더의 파일을 새 버전으로 바꾼 뒤 누르세요">크롬 확장 다시 불러오기</button>
           </div>
         </div>

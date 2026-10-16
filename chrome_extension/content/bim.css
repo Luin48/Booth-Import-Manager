@@ -265,5 +265,3 @@ html.bim-dark .bim-select option { background: var(--bim-field-bg); color: var(-
 .bim-libbar-size .bim-select { min-width: 64px; }
 .bim-loading-more { padding: 18px; text-align: center; font-size: 13px; color: var(--bim-muted); border: 1px dashed var(--bim-field-line); border-radius: 8px; }
 
-.bim-hidden { display: none !important; }
-.bim-dot-download { background: #64748b; box-shadow: 0 0 0 3px rgba(100,116,139,0.2); }

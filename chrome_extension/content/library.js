@@ -1,6 +1,6 @@
 // accounts.booth.pm/library — 파일마다 [프로젝트▾][태그▾][▶ Unity로] 붙이기
 (() => {
-  const { el, send, picker, statusChips, toast, NO_PROJECT } = window.BIM;
+  const { el, send, picker, statusChips, toast } = window.BIM;
   const idFromHref = (href, kind) => (String(href || "").match(new RegExp(`${kind}/(\\d+)`)) || [])[1] || "";
 
   // 라이브러리(div.bg-white 카드)와 주문 상세(.sheet + .legacy-list-item) 둘 다 지원
@@ -196,7 +196,7 @@
         booth,
       });
       toast(
-        res.mode === "plain" ? `다운로드 폴더로 받는 중: ${file.fileLabel}` : res.mode === "requeue" ? `이미 받은 파일 → ${projectName(choice.project)} / ${choice.tag} 대기열에 추가` : `다운로드 시작: ${file.fileLabel}`,
+        res.mode === "requeue" ? `이미 받은 파일 → ${projectName(choice.project)} / ${choice.tag} 대기열에 추가` : `다운로드 시작: ${file.fileLabel}`,
         "info",
       );
     } catch (error) {
@@ -234,9 +234,7 @@
       onChange: (choice) => {
         for (const b of fileButtons) {
           b.classList.toggle("bim-off", !choice);
-          const none = choice?.project === NO_PROJECT;
-          b.textContent = none ? "⬇ 받기" : "▶ Unity로";
-          b.title = !choice ? "위에서 프로젝트와 태그를 먼저 고르세요" : none ? "원래 다운로드 폴더로 받기" : `${projectName(choice.project)} / ${choice.tag} 로 임포트`;
+          b.title = !choice ? "위에서 프로젝트와 태그를 먼저 고르세요" : `${projectName(choice.project)} / ${choice.tag} 로 임포트`;
         }
       },
       onGo: async (choice) => {
@@ -307,14 +305,10 @@
     }
     // 처음 상태 반영 (기억해 둔 프로젝트·태그가 있으면 바로 활성)
     const initial = cardPicker.getChoice();
-    for (const b of fileButtons) {
-      b.classList.toggle("bim-off", !initial);
-      if (initial?.project === NO_PROJECT) b.textContent = "⬇ 받기";
-    }
+    for (const b of fileButtons) b.classList.toggle("bim-off", !initial);
   }
 
   function projectName(key) {
-    if (key === NO_PROJECT) return "다운로드 폴더";
     return window.BIM.boot?.projects?.find((p) => p.key === key)?.name || key;
   }
 

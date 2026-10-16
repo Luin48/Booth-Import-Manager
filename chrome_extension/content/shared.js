@@ -87,13 +87,11 @@
   document.addEventListener("visibilitychange", refreshLive);
 
   const UNTAGGED = "태그 없음";
-  const NO_PROJECT = "__download__"; // 프로젝트 없음 → 원래 다운로드 폴더로
 
   function tagsFor(projectKey) {
     const boot = state.boot;
     if (!boot) return [];
     const all = boot.config.tags || [];
-    if (projectKey === NO_PROJECT) return [];
     const project = boot.projects.find((p) => p.key === projectKey);
     if (!project || !Array.isArray(project.tags)) return all;
     const allowed = new Set(project.tags);
@@ -143,13 +141,12 @@
     const root = el("span", { class: `bim-picker${compact ? " bim-compact" : ""}` }, dot, projectSel, tagSel, go);
     const updateLive = (offline = false) => {
       const p = state.boot?.projects?.find((x) => x.key === projectSel.value);
-      const st = projectSel.value === NO_PROJECT ? "download" : offline ? "unknown" : !p ? "none" : p.running ? "on" : "off";
+      const st = offline ? "unknown" : !p ? "none" : p.running ? "on" : "off";
       dot.className = `bim-dot bim-dot-${st}`;
       const text = {
         on: "유니티 실행 중 — 바로 임포트돼요",
         off: `유니티 꺼짐 — 켜면 자동으로 임포트돼요${p?.pending ? ` (대기 ${p.pending}개)` : ""}`,
         none: "프로젝트를 고르세요",
-        download: "프로젝트 없이 원래 다운로드 폴더로 받아요",
         unknown: "로컬 앱에 연결할 수 없어요",
       }[st];
       dot.title = text;
@@ -157,18 +154,10 @@
     };
     let touched = false;
 
-    const getChoice = () => {
-      if (projectSel.value === NO_PROJECT) return { project: NO_PROJECT, tag: "" };
-      return projectSel.value && tagSel.value ? { project: projectSel.value, tag: tagSel.value } : null;
-    };
+    const getChoice = () => (projectSel.value && tagSel.value ? { project: projectSel.value, tag: tagSel.value } : null);
     const changed = () => {
       updateLive();
-      const none = projectSel.value === NO_PROJECT;
-      tagSel.classList.toggle("bim-hidden", none);
-      if (go) {
-        go.disabled = !getChoice();
-        go.textContent = none ? `⬇ ${label.replace(/Unity로/, "받기")}` : `▶ ${label}`;
-      }
+      if (go) go.disabled = !getChoice();
       onChange?.(getChoice());
     };
 
@@ -189,9 +178,8 @@
       const keepTag = touched ? tagSel.value : undefined;
       projectSel.replaceChildren(el("option", { value: "", text: boot?.projects?.length ? "프로젝트 선택" : "프로젝트 선택 (유니티를 켜면 목록이 생겨요)" }));
       for (const p of boot?.projects || []) projectSel.append(el("option", { value: p.key, text: projectLabel(p) }));
-      projectSel.append(el("option", { value: NO_PROJECT, text: "프로젝트 없음 (다운로드 폴더로)" }));
       const want = keepProject || boot?.lastProject;
-      if (want && (want === NO_PROJECT || boot.projects.some((p) => p.key === want))) projectSel.value = want;
+      if (want && boot.projects.some((p) => p.key === want)) projectSel.value = want;
       fillTags(keepProject ? keepTag : undefined);
     };
 
@@ -279,7 +267,6 @@
   window.BIM = {
     send,
     el,
-    NO_PROJECT,
     bootstrap,
     picker,
     statusChips,

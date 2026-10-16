@@ -8,7 +8,7 @@ using UnityEngine;
 
 namespace BoothImportManager
 {
-    /// <summary>ALCOM/VCC 프로젝트 찾기, 다른 프로젝트에 패키지 설치 (백그라운드 스레드에서 호출).</summary>
+    /// <summary>ALCOM/VCC 프로젝트 찾기 (백그라운드 스레드에서 호출).</summary>
     public static class BimProjects
     {
         [Serializable]
@@ -203,70 +203,6 @@ namespace BoothImportManager
             Add(Path.Combine(home, "Documents", "VRChatProjects"), "문서/VRChatProjects");
             Add(Path.GetDirectoryName(BimContext.ProjectPath), "지금 켜진 프로젝트가 있는 폴더");
             return outList;
-        }
-
-        // ---- 설치 -----------------------------------------------------------------
-        private static readonly HashSet<string> OldScriptNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            "BoothQueueWatcher", "BoothPackageImporter", "BoothImportSettings", "BoothImportWindow",
-            "BoothProjectKey", "BoothFolderIcons", "BoothImportManager.Editor",
-            "BimContext", "BimJobRunner", "BimNet", "BimProjects", "BimServer", "BimZip",
-        };
-
-        private static void RemoveAssetsCopy(string project, string rel)
-        {
-            var editorDir = Path.Combine(project, rel.Replace('/', Path.DirectorySeparatorChar));
-            if (!Directory.Exists(editorDir)) return;
-            foreach (var f in Directory.GetFiles(editorDir))
-            {
-                var name = Path.GetFileName(f);
-                var stem = name.EndsWith(".meta") ? name.Substring(0, name.Length - 5) : name;
-                var baseName = stem.EndsWith(".cs") ? stem.Substring(0, stem.Length - 3)
-                    : stem.EndsWith(".asmdef") ? stem.Substring(0, stem.Length - 7) : "";
-                if (OldScriptNames.Contains(baseName)) File.Delete(f);
-            }
-            var parent = Path.GetDirectoryName(editorDir);
-            var pkg = parent != null ? Path.Combine(parent, "package.json") : null;
-            if (pkg != null && Path.GetFileName(parent) != "Assets" && File.Exists(pkg) && File.ReadAllText(pkg).Contains(BimContext.PackageName))
-            {
-                File.Delete(pkg);
-                if (File.Exists(pkg + ".meta")) File.Delete(pkg + ".meta");
-            }
-            foreach (var d in new[] { editorDir, parent })
-            {
-                if (string.IsNullOrEmpty(d) || Path.GetFileName(d) == "Assets" || !Directory.Exists(d)) break;
-                if (Directory.EnumerateFileSystemEntries(d).Any()) break;
-                Directory.Delete(d);
-                if (File.Exists(d + ".meta")) File.Delete(d + ".meta");
-            }
-        }
-
-        private static void CopyDir(string src, string dst)
-        {
-            Directory.CreateDirectory(dst);
-            foreach (var f in Directory.GetFiles(src)) File.Copy(f, Path.Combine(dst, Path.GetFileName(f)), true);
-            foreach (var d in Directory.GetDirectories(src)) CopyDir(d, Path.Combine(dst, Path.GetFileName(d)));
-        }
-
-        /// <summary>지금 이 유니티에 설치된 패키지를 다른 프로젝트의 Packages 폴더로 복사.</summary>
-        public static string Install(string projectPath)
-        {
-            if (!IsUnityProject(projectPath)) throw new ArgumentException("유니티 프로젝트 폴더가 아니에요");
-            var src = BimContext.PackageRoot;
-            if (string.IsNullOrEmpty(src) || !Directory.Exists(src)) throw new InvalidOperationException("이 유니티의 패키지 위치를 찾지 못했어요");
-            var target = Path.Combine(projectPath, "Packages", BimContext.PackageName);
-            if (string.Equals(Path.GetFullPath(src).TrimEnd('\\', '/'), Path.GetFullPath(target).TrimEnd('\\', '/'), StringComparison.OrdinalIgnoreCase))
-                return "self";
-            var installed = FindInstalled(projectPath);
-            var migrated = false;
-            if (installed.StartsWith("assets:"))
-            {
-                RemoveAssetsCopy(projectPath, installed.Substring(7));
-                migrated = true;
-            }
-            if (Directory.Exists(target)) Directory.Delete(target, true);
-            CopyDir(src, target);
-            return migrated ? "migrated" : "packages";
         }
     }
 }

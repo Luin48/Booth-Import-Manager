@@ -171,43 +171,18 @@ $("extraAddBtn").addEventListener("click", async () => {
 
 // ---- 인식된 프로젝트 ------------------------------------------------------------
 function packageCell(p) {
-  const install = async (btn) => {
-    btn.disabled = true;
-    btn.textContent = "설치 중…";
-    try {
-      const res = await localApi("/api/projects/install", { method: "POST", body: { key: p.key } });
-      const ver = res.version ? ` v${res.version}` : "";
-      saved(
-        res.mode === "migrated"
-          ? `${p.name}: Assets 안의 예전 복사본을 지우고 Packages로 옮겼어요${ver}`
-          : `${p.name}: 설치됨${ver}${p.openWithoutPackage ? " — 열려 있는 유니티가 곧 다시 컴파일해요" : " — 다음에 유니티를 켜면 적용돼요"}`,
-      );
-      setTimeout(() => load({ scan: true }), 800);
-    } catch (error) {
-      fail(error);
-      btn.disabled = false;
-      btn.textContent = "다시 시도";
-    }
-  };
-  const canInstall = state.unities?.length > 0;
   const latest = p.latestVersion || "";
-  const btn = (text, primary) =>
-    h("button", {
-      class: `btn small${primary ? " primary" : ""}`,
-      text,
-      disabled: !canInstall,
-      title: canInstall ? "켜져 있는 유니티의 BIM 패키지를 이 프로젝트에 복사해요" : "다른 프로젝트에 설치하려면 BIM이 설치된 유니티를 하나 켜 두세요 (또는 ALCOM에서 추가)",
-      onclick: (e) => install(e.target),
-    });
   if (p.installed === "packages") {
     const cur = p.installedVersion || "";
     const outdated = latest && cur && cur !== latest && !p.running;
-    return h("div", { class: "row wrap" }, h("span", { class: `chip ${outdated ? "warn" : "ok"}`, text: cur ? `설치됨 v${cur}` : "설치됨" }), outdated ? btn(`v${latest}로 업데이트`, true) : null);
+    return h("span", {
+      class: `chip ${outdated ? "warn" : "ok"}`,
+      title: outdated ? `새 버전 v${latest} — ALCOM에서 업데이트하세요` : "",
+      text: cur ? `v${cur}${outdated ? " (업데이트 있음)" : ""}` : "설치됨",
+    });
   }
-  if (p.installed?.startsWith("assets:")) {
-    return h("div", { class: "row wrap" }, h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (예전 방식)" }), btn(latest ? `v${latest}로 업데이트` : "업데이트", true));
-  }
-  return btn(latest ? `설치 (v${latest})` : "설치", true);
+  if (p.installed?.startsWith("assets:")) return h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (예전 방식)" });
+  return h("span", { class: "chip", title: "ALCOM 저장소에서 추가하세요 (아래 '유니티 패키지')", text: "미설치" });
 }
 
 function renderProjects() {
@@ -329,9 +304,23 @@ function renderTags() {
     ...tags.map((tag, index) => {
       const special = tag.name === UNTAGGED;
       let armed = false;
-      return h(
+      const row = h(
         "div",
-        { class: "tag-row" },
+        { class: "tag-row", "data-index": String(index) },
+        h("span", {
+          class: "drag-handle",
+          title: "잡고 끌어서 순서 바꾸기 (키보드: ↑ ↓)",
+          tabindex: "0",
+          role: "button",
+          "aria-label": `${tag.name} 순서 바꾸기`,
+          text: "⠿",
+          onmousedown: () => (row.draggable = true),
+          ontouchstart: () => (row.draggable = true),
+          onkeydown: (e) => {
+            if (e.key === "ArrowUp" && index > 0) { e.preventDefault(); moveTo(index, index - 1, true); }
+            if (e.key === "ArrowDown" && index < tags.length - 1) { e.preventDefault(); moveTo(index, index + 1, true); }
+          },
+        }),
         h("input", {
           type: "checkbox",
           class: "tag-check",
@@ -363,8 +352,6 @@ function renderTags() {
         h(
           "div",
           { class: "tools" },
-          h("button", { class: "btn small", title: "위로", text: "↑", disabled: index === 0, onclick: () => move(index, -1) }),
-          h("button", { class: "btn small", title: "아래로", text: "↓", disabled: index === tags.length - 1, onclick: () => move(index, 1) }),
           h("button", {
             class: "btn small",
             title: "같은 프로젝트 할당까지 그대로 복제",
@@ -391,18 +378,62 @@ function renderTags() {
           }),
         ),
       );
+      return row;
     }),
   );
 
   renderCheckBar();
 
-  function move(index, delta) {
+  function moveTo(from, to, refocus = false) {
+    if (from === to) return;
     const next = [...tags];
-    const [item] = next.splice(index, 1);
-    next.splice(index + delta, 0, item);
-    saveTags(next);
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    saveTags(next).then(() => {
+      if (refocus) $("tagRows").children[to]?.querySelector(".drag-handle")?.focus();
+    });
+  }
+
+  // 끌어서 놓기: 핸들을 잡았을 때만 줄이 끌린다
+  let dragFrom = -1;
+  const rows = [...$("tagRows").children];
+  const clear = () => rows.forEach((r) => r.classList.remove("drop-before", "drop-after", "dragging"));
+  for (const r of rows) {
+    r.addEventListener("dragstart", (e) => {
+      dragFrom = Number(r.dataset.index);
+      r.classList.add("dragging");
+      e.dataTransfer.effectAllowed = "move";
+      e.dataTransfer.setData("text/plain", r.dataset.index);
+    });
+    r.addEventListener("dragend", () => {
+      r.draggable = false;
+      clear();
+    });
+    r.addEventListener("dragover", (e) => {
+      if (dragFrom < 0) return;
+      e.preventDefault();
+      const rect = r.getBoundingClientRect();
+      const after = e.clientY > rect.top + rect.height / 2;
+      rows.forEach((x) => x !== r && x.classList.remove("drop-before", "drop-after"));
+      r.classList.toggle("drop-after", after);
+      r.classList.toggle("drop-before", !after);
+    });
+    r.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const target = Number(r.dataset.index);
+      const after = r.classList.contains("drop-after");
+      clear();
+      if (dragFrom < 0) return;
+      let to = target + (after ? 1 : 0);
+      if (dragFrom < to) to -= 1;
+      const from = dragFrom;
+      dragFrom = -1;
+      moveTo(from, to);
+    });
   }
 }
+// 핸들을 눌렀다 떼기만 하면 다시 끌 수 없는 상태로 (입력칸 글자 선택 방해 방지)
+document.addEventListener("mouseup", () => document.querySelectorAll(".tag-row[draggable=true]").forEach((r) => (r.draggable = false)));
 
 function uniqueName(base) {
   const names = new Set((state.config.tags || []).map((t) => t.name));
@@ -751,18 +782,6 @@ $("queueOpenBtn").addEventListener("click", () => {
 $("saveSettingsBtn").addEventListener("click", async () => {
   await saveConfig({ archiveDir: $("archiveDir").value.trim(), keepArchive: $("keepArchive").checked });
   saved(state.unities?.length ? "저장됨 (유니티에도 반영)" : "저장됨 — 유니티를 켜면 반영돼요");
-});
-$("importV03Btn").addEventListener("click", async () => {
-  $("importV03Btn").disabled = true;
-  try {
-    const res = await localApi("/api/import-v03", { method: "POST", body: {} });
-    saved(`가져옴: 태그 ${res.tags}개, 세트 ${res.tagSets}개, 프로젝트 ${res.projects}개`);
-    await load();
-  } catch (error) {
-    fail(error);
-  } finally {
-    $("importV03Btn").disabled = false;
-  }
 });
 $("vpmAddBtn").addEventListener("click", () => {
   window.open(`vcc://vpm/addRepo?url=${encodeURIComponent(VPM_INDEX)}`, "_self");

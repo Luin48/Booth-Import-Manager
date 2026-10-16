@@ -340,12 +340,6 @@ namespace BoothImportManager
                     return JsonUtility.ToJson(new PathResponse { result = "queued" });
                 }
 
-                case "/bim/install":
-                {
-                    var r = JsonUtility.FromJson<PathRequest>(Body(req));
-                    return JsonUtility.ToJson(new PathResponse { path = r.path, result = BimProjects.Install(r.path) });
-                }
-
                 case "/bim/pick-folder":
                 {
                     var r = JsonUtility.FromJson<PathRequest>(Body(req));

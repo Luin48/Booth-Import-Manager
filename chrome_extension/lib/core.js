@@ -10,7 +10,6 @@
 
 export const QUEUE_FOLDER = "BoothImportManager";
 export const QUEUE_SUB = "대기열";
-export const NO_PROJECT = "__download__"; // 선택기의 "프로젝트 없음 (다운로드 폴더)"
 export const UNTAGGED = "태그 없음";
 export const VPM_INDEX = "https://raw.githubusercontent.com/Luin48/Booth-Import-Manager/main/vpm/index.json";
 const PORTS = Array.from({ length: 10 }, (_, i) => 7840 + i);
@@ -33,7 +32,6 @@ const DEFAULT_CONFIG = () => ({
   archiveDir: "", // 비우면 다운로드\BoothImportManager\보관
   keepArchive: true,
   downloadsDir: "", // 첫 다운로드 때 알아냄
-  migratedFrom03: false,
 });
 
 export async function getConfig() {
@@ -164,11 +162,7 @@ export async function scanProjects() {
   const cfg = await getConfig();
   const res = await unityApi("/bim/scan", { roots: cfg.projectRoots || [], extra: cfg.extraProjects || [] }, { timeoutMs: 30000 });
   const list = res.projects || [];
-  // 폴더 등록 전이라도 이미 알던 프로젝트(이전 목록)는 남겨 둔다 → 지금 안 보이는 것만 표시
-  const prev = (await chrome.storage.local.get(PROJ_KEY))[PROJ_KEY]?.list || [];
-  const keys = new Set(list.map((p) => p.key));
-  const keep = prev.filter((p) => !keys.has(p.key) && p.fromV03).map((p) => ({ ...p, missing: true }));
-  await chrome.storage.local.set({ [PROJ_KEY]: { at: Date.now(), list: [...list, ...keep] } });
+  await chrome.storage.local.set({ [PROJ_KEY]: { at: Date.now(), list } });
   return list;
 }
 
@@ -310,11 +304,7 @@ async function enrichThumbs(job) {
 /** [Unity로] / [받기] 버튼 */
 export async function startJob({ url, project, tag, booth = {}, preferLocal = false }, notify) {
   if (!url) throw new Error("다운로드 주소가 없어요");
-  if (!project || project === NO_PROJECT) {
-    // 프로젝트 없음: 원래 다운로드 폴더로 그대로
-    const downloadId = await chrome.downloads.download({ url, conflictAction: "uniquify", saveAs: false });
-    return { mode: "plain", downloadId };
-  }
+  if (!project) throw new Error("프로젝트를 고르세요");
   const cfg = await getConfig();
   const projects = await listProjects();
   const job = {
@@ -624,57 +614,6 @@ export async function boothStatus({ itemIds = [], downloadableIds = [] }) {
   return out;
 }
 
-// ---- v0.3(exe) 설정 가져오기 ------------------------------------------------------------
-export async function importFromV03(port = 7831) {
-  const base = `http://127.0.0.1:${port}`;
-  const config = await fetchJson(`${base}/api/config`, { timeoutMs: 3000 }).catch(() => null);
-  if (!config) throw new Error("v0.3 로컬 앱(BoothImportManager.exe)이 꺼져 있어요. 한 번 실행한 뒤 다시 눌러 주세요");
-  const projects = await fetchJson(`${base}/api/projects?all=1&deep=0`, { timeoutMs: 8000 }).catch(() => []);
-  const cfg = await getConfig();
-  const tags = (config.tags || []).map((t) => ({ id: String(t.id), name: String(t.name) })).filter((t) => t.name);
-  const projectSettings = { ...cfg.projectSettings };
-  for (const p of projects) {
-    projectSettings[p.key] = {
-      tags: Array.isArray(p.tags) ? p.tags : null,
-      assetRoot: p.assetRoot || "Assets",
-      hidden: Boolean(p.hidden),
-      alias: p.name && p.name !== p.folderName ? p.name : "",
-    };
-  }
-  const merged = await saveConfig({
-    tags: tags.length ? tags : cfg.tags,
-    tagSets: config.tagSets || cfg.tagSets,
-    projectRoots: config.projectRoots || cfg.projectRoots,
-    extraProjects: config.extraProjects || cfg.extraProjects,
-    projectSettings,
-    archiveDir: cfg.archiveDir || config.intakeFolder || "",
-    migratedFrom03: true,
-  });
-  // 유니티가 아직 하나도 안 켜졌어도 선택기에 프로젝트가 보이게 목록을 미리 채운다
-  const stored = (await chrome.storage.local.get(PROJ_KEY))[PROJ_KEY];
-  if (!stored?.list?.length && projects.length) {
-    await chrome.storage.local.set({
-      [PROJ_KEY]: {
-        at: 0,
-        list: projects.map((p) => ({ key: p.key, name: p.folderName || p.name, path: p.path, unityVersion: p.unityVersion || "", installed: p.installed || "", fromV03: true })),
-      },
-    });
-  }
-  return { tags: merged.tags.length, tagSets: merged.tagSets.length, projects: projects.length, archiveDir: merged.archiveDir };
-}
-
-/** 처음 설치했을 때 한 번: v0.3 앱이 켜져 있으면 조용히 가져온다 */
-export async function autoMigrate() {
-  const cfg = await getConfig();
-  const data = await chrome.storage.local.get(CFG_KEY);
-  if (cfg.migratedFrom03 || (data[CFG_KEY] && (cfg.tags.length > 1 || cfg.projectRoots.length))) return null;
-  try {
-    return await importFromV03();
-  } catch {
-    return null;
-  }
-}
-
 // ---- 관리 페이지·사이드패널용 (예전 로컬 앱 주소 흉내) ---------------------------------------
 export async function route(path, method = "GET", body = {}) {
   const [p, query = ""] = path.split("?");
@@ -708,14 +647,6 @@ export async function route(path, method = "GET", body = {}) {
       return (await unityApi("/bim/suggest").catch(() => ({ items: [] }))).items || [];
     case "POST /api/projects/settings":
       return saveProjectSettings(body.updates);
-    case "POST /api/projects/install": {
-      const list = await listProjects();
-      const project = list.find((x) => x.key === body.key);
-      if (!project) throw new Error("프로젝트를 찾을 수 없어요");
-      const res = await unityApi("/bim/install", { path: project.path }, { timeoutMs: 60000 });
-      scanProjects().catch(() => {});
-      return { mode: res.result, version: (await anyUnity())?.version || "" };
-    }
     case "POST /api/projects/add": {
       const path = String(body.path || "").trim();
       if (!path) throw new Error("경로를 입력하세요");
@@ -730,8 +661,6 @@ export async function route(path, method = "GET", body = {}) {
     }
     case "POST /api/reveal":
       return unityApi("/bim/reveal", { path: body.path });
-    case "POST /api/import-v03":
-      return importFromV03(Number(body.port) || 7831);
     case "GET /api/jobs": {
       await refreshJobs({ force: true });
       return Object.values(await getJobs()).sort((a, b) => b.createdAt - a.createdAt);
