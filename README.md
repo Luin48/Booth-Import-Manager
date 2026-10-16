@@ -68,7 +68,7 @@ BOOTH 라이브러리 ──[▶ Unity로]──▶ 크롬 확장: 다운로드
 | --- | --- |
 | `BoothImportManager-ChromeExtension-v1.x.x.zip` | 크롬 확장 |
 | `BoothImportManager-Unity-v1.x.x.unitypackage` | 유니티 패키지 (ALCOM/VCC를 쓰면 필요 없음) |
-| `BoothThumbnailMatcher-Unity-v1.x.x.unitypackage` | (선택) 추가 도구: 이미 설치한 에셋에 썸네일 붙이기 — [썸네일 매칭](#썸네일-매칭-이미-설치한-에셋) |
+| `BoothThumbnailMatcher-Unity-v1.0.0.unitypackage` | (선택, v1.1.0-1 릴리즈) 이미 설치한 에셋에 썸네일 붙이기 — [썸네일 매칭](#썸네일-매칭-이미-설치한-에셋) |
 
 ### 1. 크롬 확장
 
@@ -269,7 +269,9 @@ Assets/02.옷/
 
 ### 썸네일 매칭 (이미 설치한 에셋)
 
-BIM을 쓰기 전에 직접 넣어둔 에셋 폴더에도 BOOTH 썸네일을 한 번에 붙이는 **추가 도구**입니다. 따로 설치하는 유니티 패키지(**BIM Thumbnail Matcher**)이고, Booth Import Manager 유니티 패키지 1.0.3 이상이 필요합니다.
+> 이 기능은 **v1.1.0-1**에만 들어 있습니다. 처음 1회 실행하고 나면 다시 쓸 일이 없어서 정식 버전(**v1.1.0**)에서 분리해 두었습니다. 붙인 아이콘은 v1.1.0으로 돌아가도 그대로 남습니다.
+
+BIM을 쓰기 전에 직접 넣어둔 에셋 폴더에도 BOOTH 썸네일을 한 번에 붙이는 **추가 도구**입니다. 따로 설치하는 유니티 패키지(**BIM Thumbnail Matcher**)이고, Booth Import Manager 유니티 패키지 1.1.0 이상과 v1.1.0-1 크롬 확장이 필요합니다.
 
 1. `Tools > Booth Import Manager > 썸네일 매칭 (설치된 에셋)` 창을 엽니다.
 2. **① 부스 라이브러리 목록**: **부스에서 불러오기**를 누르면 크롬으로 BOOTH 라이브러리가 열리고, BIM 확장이 구매·선물 목록(상품 이름, 샵, 썸네일 주소, 파일 이름)을 `다운로드\BoothImportManager\_bim\library.json`에 저장합니다. 창이 자동으로 읽어요.

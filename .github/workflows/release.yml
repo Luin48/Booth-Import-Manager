@@ -35,10 +35,12 @@ jobs:
       - name: Check versions
         run: |
           v="${VERSION#v}"
-          ext=$(python -c "import json;print(json.load(open('chrome_extension/manifest.json'))['version'])")
+          # 크롬 확장은 version 에 '-' 를 못 써서 1.1.0-1 같은 버전은 version_name 으로 비교
+          ext=$(python -c "import json;m=json.load(open('chrome_extension/manifest.json'));print(m.get('version_name') or m['version'])")
           pkg=$(python -c "import json;print(json.load(open('unity_package/BoothImportManager/package.json'))['version'])")
           echo "release=$v extension=$ext unity=$pkg"
-          test "$ext" = "$v" && test "$pkg" = "$v"
+          # 유니티 패키지는 1.1.0-1 처럼 '-N' 이 붙은 릴리즈에서도 1.1.0
+          test "$ext" = "$v" && test "$pkg" = "${v%%-*}"
           test -f "docs/release-notes-v$v.md"
 
       - name: Package release files
