@@ -5,6 +5,7 @@ import zipfile
 from pathlib import Path
 
 from config import get_config
+from booth_icons import write_sidecar
 from file_mover import unique_path
 from models import SUPPORTED_SUFFIXES
 
@@ -15,13 +16,18 @@ def sanitize_folder_name(name: str) -> str:
     return cleaned or "미분류"
 
 
-def _copy_package(package: Path, tag: str, project_key: str = "") -> Path:
+def _copy_package(package: Path, tag: str, project_key: str = "", booth: dict | None = None) -> Path:
     cfg = get_config()
     base = Path(cfg.projects_queue_root) / project_key if project_key else Path(cfg.queue_folder)
     queue_dir = base / sanitize_folder_name(tag)
     queue_dir.mkdir(parents=True, exist_ok=True)
     target = unique_path(queue_dir / package.name)
-    shutil.copy2(package, target)
+    # 상품 정보(썸네일 경로)를 패키지보다 먼저 써둔다 — 유니티가 패키지를 보자마자 읽을 수 있게
+    if booth:
+        write_sidecar(str(target), {**booth, "packageName": package.stem})
+    tmp = target.with_name(target.name + ".part")
+    shutil.copy2(package, tmp)
+    tmp.replace(target)  # 감시자에게는 완성된 파일만 보이게
     return target
 
 
@@ -70,7 +76,7 @@ def _packages_from_zip(path: Path) -> tuple[list[Path], Path]:
     return list(extract_dir.rglob("*.unitypackage")), extract_dir
 
 
-def queue_for_unity(filename: str, tag: str, delete_local: bool = False, project_key: str = "") -> dict:
+def queue_for_unity(filename: str, tag: str, delete_local: bool = False, project_key: str = "", booth: dict | None = None) -> dict:
     cfg = get_config()
     source = Path(cfg.intake_folder) / Path(filename).name
     if not source.exists() or source.suffix.lower() not in SUPPORTED_SUFFIXES:
@@ -79,12 +85,12 @@ def queue_for_unity(filename: str, tag: str, delete_local: bool = False, project
     queued: list[Path] = []
     extracted: list[Path] = []
     if source.suffix.lower() == ".unitypackage":
-        queued.append(_copy_package(source, tag, project_key))
+        queued.append(_copy_package(source, tag, project_key, booth))
     elif source.suffix.lower() == ".zip":
         packages, extract_dir = _packages_from_zip(source)
         extracted.append(extract_dir)
         for package in packages:
-            queued.append(_copy_package(package, tag, project_key))
+            queued.append(_copy_package(package, tag, project_key, booth))
 
     if delete_local or cfg.delete_local_after_queue:
         source.unlink(missing_ok=True)

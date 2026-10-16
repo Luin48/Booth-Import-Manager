@@ -11,7 +11,7 @@ namespace BoothImportManager
     [InitializeOnLoad]
     public static class BoothQueueWatcher
     {
-        public const string Version = "0.3.0";
+        public const string Version = "0.3.1";
         private const string PrefsKey = "BoothImportManager.PendingFiles";
         private const double HeartbeatInterval = 10.0;
         private static readonly ConcurrentQueue<string> Queue = new ConcurrentQueue<string>();

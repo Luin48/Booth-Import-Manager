@@ -67,3 +67,9 @@ tr.is-hidden { opacity: 0.5; }
 .form label { display: grid; gap: 4px; margin-bottom: 12px; }
 .form label.check { display: flex; align-items: center; gap: 8px; }
 .form h2 { margin-top: 10px; }
+
+.set-row { display: grid; grid-template-columns: minmax(160px, 240px) 1fr auto; gap: 10px; align-items: center; padding: 8px; border-radius: var(--radius); background: var(--panel-2); }
+.set-row .set-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+.set-row .set-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
+.set-row .set-tools select { height: 24px; font-size: 12px; }
+@media (max-width: 760px) { .set-row { grid-template-columns: 1fr; } .set-row .set-tools { justify-content: flex-start; } }

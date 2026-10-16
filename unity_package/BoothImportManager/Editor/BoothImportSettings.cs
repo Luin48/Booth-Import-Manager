@@ -50,6 +50,15 @@ namespace BoothImportManager
             }
         }
 
+        public int LocalAppPort
+        {
+            get
+            {
+                var bridge = ReadBridge();
+                return bridge != null && bridge.port > 0 ? bridge.port : 7831;
+            }
+        }
+
         public bool UsingBridge => string.IsNullOrEmpty(WatchFolder) && ReadBridge() != null;
 
         /// <summary>v0.2 공용 큐</summary>

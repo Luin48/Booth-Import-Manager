@@ -9,6 +9,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
+import booth_icons
 import booth_meta
 import projects
 from config import AppConfig, RESOURCE_DIR, Tag, UNTAGGED_TAG_NAME, ensure_special_tags, get_config, reload_config, write_bridge
@@ -27,7 +28,7 @@ from queue_manager import queue_for_unity
 from tag_state import load_tag_state, remove_asset_tag, set_asset_tag
 
 
-APP_VERSION = "0.3.0"
+APP_VERSION = "0.3.1"
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -113,6 +114,7 @@ def _config_payload() -> dict:
         "projectRoots": cfg.project_roots,
         "extraProjects": cfg.extra_projects,
         "projectsQueueRoot": cfg.projects_queue_root,
+        "tagSets": cfg.tag_sets,
     }
 
 
@@ -141,7 +143,14 @@ def _queue_one(filename: str, tag: str, delete_local: bool = False, project_key:
     project = _resolve_project(project_key)
     if project:
         projects.write_project_file(project_key, project)
-    result = queue_for_unity(filename, tag, delete_local, project_key)
+    booth = None
+    item_id = booth_meta.refresh().get(filename, {}).get("itemId", "")
+    if item_id and project_key:
+        icons = booth_icons.ensure_icons(item_id)
+        if icons.get("itemId"):
+            entry = booth_meta.refresh().get(filename, {})
+            booth = {**icons, "fileLabel": entry.get("fileLabel", ""), "sourceFile": filename}
+    result = queue_for_unity(filename, tag, delete_local, project_key, booth)
     booth_meta.ensure_entry(filename)
     project_name = project["name"] if project else "(공용 큐)"
     if result.get("status") == "no_package":
@@ -268,6 +277,8 @@ class AppHandler(BaseHTTPRequestHandler):
             self._queue_cancel(data)
         elif path == "/api/queue/retry":
             self._queue_retry(data)
+        elif path == "/api/booth/icons":
+            self._booth_icons(data)
         elif path == "/api/pick-folder":
             self._pick_folder(data)
         elif path == "/api/shutdown":
@@ -451,6 +462,7 @@ class AppHandler(BaseHTTPRequestHandler):
             self._json({"error": "invalid path"}, 400)
             return
         target.unlink(missing_ok=True)
+        Path(str(target).removesuffix(".failed") + ".booth.json").unlink(missing_ok=True)
         booth_meta.cancel_path(str(target).removesuffix(".failed"))
         self._json({"status": "cancelled"})
 
@@ -464,6 +476,16 @@ class AppHandler(BaseHTTPRequestHandler):
         target.replace(original)
         booth_meta.retry_path(str(original))
         self._json({"status": "pending"})
+
+    def _booth_icons(self, data: dict) -> None:
+        """유니티의 '부스 상품 연결' 메뉴용: 상품 URL/ID → 썸네일·샵 아이콘 로컬 경로."""
+        result = booth_icons.ensure_icons(str(data.get("item", "")))
+        if not result.get("itemId"):
+            self._json({"error": "상품 번호를 찾지 못했어요"}, 400)
+        elif result.get("error"):
+            self._json(result, 502)
+        else:
+            self._json(result)
 
     def _pick_folder(self, data: dict) -> None:
         if not _pick_lock.acquire(blocking=False):
@@ -500,12 +522,19 @@ class AppHandler(BaseHTTPRequestHandler):
             project_roots=[str(p).strip() for p in data.get("projectRoots", current.project_roots) if str(p).strip()],
             extra_projects=[str(p).strip() for p in data.get("extraProjects", current.extra_projects) if str(p).strip()],
             projects=current.projects,
+            tag_sets=[
+                {"id": str(ts.get("id") or uuid.uuid4()), "name": str(ts.get("name", "")).strip(), "tags": [str(t) for t in ts.get("tags", [])]}
+                for ts in data.get("tagSets", current.tag_sets)
+                if isinstance(ts, dict) and str(ts.get("name", "")).strip()
+            ],
         )
         # 삭제된 태그는 프로젝트 할당에서도 제거
         tag_ids = {t.id for t in tags}
         for settings in cfg.projects.values():
             if isinstance(settings.get("tags"), list):
                 settings["tags"] = [t for t in settings["tags"] if t in tag_ids]
+        for ts in cfg.tag_sets:
+            ts["tags"] = [t for t in ts["tags"] if t in tag_ids]
         ensure_special_tags(cfg)
         Path(cfg.download_folder).mkdir(parents=True, exist_ok=True)
         Path(cfg.intake_folder).mkdir(parents=True, exist_ok=True)

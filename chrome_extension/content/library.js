@@ -3,10 +3,11 @@
   const { el, send, picker, statusChips, toast } = window.BIM;
   const idFromHref = (href, kind) => (String(href || "").match(new RegExp(`${kind}/(\\d+)`)) || [])[1] || "";
 
+  // 라이브러리(div.bg-white 카드)와 주문 상세(.sheet + .legacy-list-item) 둘 다 지원
   function findCards() {
     const cards = new Set();
     for (const btn of document.querySelectorAll(".js-download-button[data-href]")) {
-      const card = btn.closest("div.bg-white") || btn.closest("[class*='rounded']");
+      const card = btn.closest("div.bg-white") || btn.closest(".sheet") || btn.closest("[class*='rounded']");
       if (card) cards.add(card);
     }
     return [...cards];
@@ -14,10 +15,17 @@
 
   function cardInfo(card) {
     const link = card.querySelector('a[href*="/items/"]');
-    const shop = [...card.querySelectorAll("a")].find((a) => /^https:\/\/[^/]+\.booth\.pm\/?$/.test(a.href) && !a.href.includes("accounts."));
+    const shopBlock = card.closest(".l-order-detail-by-shop");
+    const shop =
+      shopBlock?.querySelector(".l-order-detail-sheet-group-header a") ||
+      [...card.querySelectorAll("a")].find((a) => /^https:\/\/[^/]+\.booth\.pm\/?$/.test(a.href) && !a.href.includes("accounts."));
+    const title =
+      card.querySelector(".font-bold")?.textContent ||
+      [...card.querySelectorAll('a[href*="/items/"]')].map((a) => a.textContent.trim()).find(Boolean) ||
+      "";
     return {
       itemId: idFromHref(link?.href, "items"),
-      itemName: (card.querySelector(".font-bold")?.textContent || "").trim(),
+      itemName: title.trim(),
       shopName: (shop?.textContent || "").trim(),
       shopUrl: shop?.href || "",
       thumbnail: card.querySelector("img")?.getAttribute("src") || "",
@@ -29,10 +37,11 @@
     const rows = [];
     for (const btn of card.querySelectorAll(".js-download-button[data-href]")) {
       const url = btn.dataset.href;
-      if (seen.has(url)) continue;
+      if (!url || seen.has(url)) continue;
       seen.add(url);
-      const row = btn.closest(".desktop\\:flex") || btn.parentElement?.parentElement?.parentElement;
-      const fileLabel = (row?.querySelector(".min-w-0")?.textContent || "").trim();
+      const legacy = btn.closest(".legacy-list-item");
+      const row = legacy || btn.closest(".desktop\\:flex") || btn.parentElement?.parentElement?.parentElement;
+      const fileLabel = ((legacy ? legacy.querySelector("b") : row?.querySelector(".min-w-0"))?.textContent || "").trim();
       rows.push({ btn, row, url, downloadableId: idFromHref(url, "downloadables"), fileLabel });
     }
     return rows;
@@ -93,8 +102,9 @@
       },
     });
     const bar = el("div", { class: "bim-cardbar" }, el("span", { class: "bim-logo", text: "BIM" }), cardSlot, allPicker);
-    const header = card.firstElementChild;
-    header?.after(bar);
+    const list = card.querySelector(".list");
+    if (list) list.before(bar);
+    else card.firstElementChild?.after(bar);
 
     for (const file of files) {
       const statusSlot = el("span", { class: "bim-file-status" });

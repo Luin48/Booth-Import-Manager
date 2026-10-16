@@ -10,7 +10,7 @@ on:
       version:
         description: "버전 (예: 0.3.0)"
         required: true
-        default: "0.3.0"
+        default: "0.3.1"
       prerelease:
         description: "프리릴리즈로 올리기"
         type: boolean

@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "Booth Import Manager",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "BOOTH 라이브러리에서 바로 Unity로 임포트하고, 받은 파일과 찜목록을 관리합니다.",
-  "permissions": ["downloads", "storage", "sidePanel", "scripting", "tabs"],
+  "permissions": [
+    "downloads",
+    "storage",
+    "sidePanel",
+    "scripting",
+    "tabs"
+  ],
   "host_permissions": [
     "http://127.0.0.1/*",
     "http://localhost/*",
@@ -32,16 +38,35 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://accounts.booth.pm/library*"],
-      "js": ["content/shared.js", "content/library.js"],
-      "css": ["content/bim.css"],
+      "matches": [
+        "https://accounts.booth.pm/library*",
+        "https://accounts.booth.pm/orders/*"
+      ],
+      "js": [
+        "content/shared.js",
+        "content/library.js"
+      ],
+      "css": [
+        "content/bim.css"
+      ],
       "run_at": "document_idle"
     },
     {
-      "matches": ["https://booth.pm/*/items/*", "https://booth.pm/items/*", "https://*.booth.pm/items/*"],
-      "exclude_matches": ["https://accounts.booth.pm/*"],
-      "js": ["content/shared.js", "content/item.js"],
-      "css": ["content/bim.css"],
+      "matches": [
+        "https://booth.pm/*/items/*",
+        "https://booth.pm/items/*",
+        "https://*.booth.pm/items/*"
+      ],
+      "exclude_matches": [
+        "https://accounts.booth.pm/*"
+      ],
+      "js": [
+        "content/shared.js",
+        "content/item.js"
+      ],
+      "css": [
+        "content/bim.css"
+      ],
       "run_at": "document_idle"
     }
   ]

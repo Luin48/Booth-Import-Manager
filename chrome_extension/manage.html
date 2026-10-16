@@ -91,7 +91,17 @@
           </div>
         </div>
         <div class="card block">
-          <h2>태그 세트 복사 / 붙여넣기</h2>
+          <h2>태그 세트</h2>
+          <p class="muted">자주 쓰는 태그 조합에 이름을 붙여 저장해 두고, 프로젝트에 한 번에 적용해요. (예: 아바타 프로젝트용 / 월드 프로젝트용)</p>
+          <div id="tagSetRows" class="stack"></div>
+          <div class="row wrap">
+            <input id="newSetName" type="text" class="grow" placeholder="세트 이름 (예: 아바타 프로젝트용 공용 태그)" />
+            <select id="newSetSource" aria-label="세트로 만들 태그"></select>
+            <button id="addSetBtn" class="btn primary">세트로 저장</button>
+          </div>
+        </div>
+        <div class="card block">
+          <h2>태그 목록 복사 / 붙여넣기</h2>
           <p class="muted">다른 PC나 친구와 태그 구성을 공유할 때 써요. 붙여넣으면 이름이 같은 태그는 건너뛰고 새 것만 추가돼요.</p>
           <div class="row wrap">
             <button id="exportTagsBtn" class="btn">현재 태그 복사</button>

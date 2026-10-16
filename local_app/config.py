@@ -48,6 +48,8 @@ class AppConfig:
     extra_projects: list[str] = field(default_factory=list)
     # v0.3: 프로젝트별 설정 { projectKey: {"tags": [tagId...], "assetRoot": "Assets/...", "hidden": bool, "alias": str} }
     projects: dict = field(default_factory=dict)
+    # v0.3.1: 태그 세트 [{"id", "name", "tags": [tagId...]}] — 프로젝트에 한 번에 적용
+    tag_sets: list = field(default_factory=list)
 
     @property
     def queue_folder(self) -> str:

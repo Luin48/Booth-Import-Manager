@@ -42,12 +42,15 @@ namespace BoothImportManager
                 return;
             }
 
-            var expectedFolders = ReadTopLevelFoldersFromPackage(packagePath).ToArray();
+            var packagePaths = ReadPackagePathnames(packagePath);
+            var expectedFolders = FoldersFromPaths(packagePaths).ToArray();
             var state = new PendingState
             {
                 packagePath = packagePath,
                 tag = tag,
                 expectedFolders = expectedFolders,
+                packagePaths = packagePaths.ToArray(),
+                booth = BoothFolderIcons.ReadSidecar(packagePath),
             };
             File.WriteAllText(PendingFile, JsonUtility.ToJson(state), Encoding.UTF8);
 
@@ -152,8 +155,26 @@ namespace BoothImportManager
                 AssetDatabase.StopAssetEditing();
             }
 
+            // 부스 썸네일로 폴더 아이콘 지정 (샵 폴더 / 에셋 폴더)
+            if (state.booth != null && !string.IsNullOrEmpty(state.booth.itemId))
+            {
+                try
+                {
+                    BoothFolderIcons.ApplyAfterImport(state.booth, state.packagePaths ?? Array.Empty<string>(), rootName =>
+                    {
+                        var moved = $"{targetRoot}/{NormalizeUnityDuplicateName(rootName)}";
+                        if (AssetDatabase.IsValidFolder(moved)) return moved;
+                        var original = $"Assets/{rootName}";
+                        return AssetDatabase.IsValidFolder(original) ? original : null;
+                    });
+                }
+                catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Folder icon failed: {e.Message}"); }
+            }
+
             try { File.Delete(state.packagePath); }
             catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Queue file delete failed: {e.Message}"); }
+            try { if (File.Exists(state.packagePath + ".booth.json")) File.Delete(state.packagePath + ".booth.json"); }
+            catch { }
 
             AssetDatabase.Refresh();
             ScheduleDelayedDuplicateMerge(assetRoot);
@@ -292,9 +313,22 @@ namespace BoothImportManager
                 Debug.LogWarning($"[BoothImportManager] File move failed: {source} -> {finalTarget}: {error}");
         }
 
-        private static List<string> ReadTopLevelFoldersFromPackage(string packagePath)
+        private static IEnumerable<string> FoldersFromPaths(IEnumerable<string> paths)
         {
             var folderNames = new HashSet<string>();
+            foreach (var assetPath in paths)
+            {
+                if (!assetPath.StartsWith("Assets/")) continue;
+                foreach (var part in assetPath.Substring("Assets/".Length).Split('/'))
+                    if (!string.IsNullOrEmpty(part))
+                        folderNames.Add(part);
+            }
+            return folderNames;
+        }
+
+        private static List<string> ReadPackagePathnames(string packagePath)
+        {
+            var paths = new List<string>();
             try
             {
                 using var fs = File.OpenRead(packagePath);
@@ -313,16 +347,9 @@ namespace BoothImportManager
                     {
                         var content = new byte[size];
                         ReadFully(gz, content, (int)size);
-                        var assetPath = Encoding.UTF8.GetString(content).Trim('\0', '\n', '\r', ' ');
+                        var assetPath = Encoding.UTF8.GetString(content).Split('\n')[0].Trim('\0', '\r', ' ');
                         if (assetPath.StartsWith("Assets/"))
-                        {
-                            var parts = assetPath.Substring("Assets/".Length).Split('/');
-                            foreach (var part in parts)
-                            {
-                                if (!string.IsNullOrEmpty(part))
-                                    folderNames.Add(part);
-                            }
-                        }
+                            paths.Add(assetPath);
                         SkipPadding(gz, size);
                     }
                     else
@@ -335,7 +362,7 @@ namespace BoothImportManager
             {
                 Debug.LogWarning($"[BoothImportManager] Package scan failed: {e.Message}");
             }
-            return folderNames.ToList();
+            return paths;
         }
 
         private static bool ReadFully(Stream stream, byte[] buffer, int count)
@@ -439,6 +466,8 @@ namespace BoothImportManager
             public string packagePath;
             public string tag;
             public string[] expectedFolders;
+            public string[] packagePaths;
+            public BoothFolderIcons.BoothMeta booth;
         }
     }
 }

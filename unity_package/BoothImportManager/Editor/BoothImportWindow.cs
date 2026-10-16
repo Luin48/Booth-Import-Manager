@@ -31,6 +31,11 @@ namespace BoothImportManager
             settings.WatchLegacyQueue = EditorGUILayout.Toggle("v0.2 공용 큐도 감시", settings.WatchLegacyQueue);
 
             EditorGUILayout.Space();
+            EditorGUILayout.LabelField("폴더 아이콘", EditorStyles.boldLabel);
+            BoothFolderIcons.Enabled = EditorGUILayout.Toggle($"부스 썸네일 표시 ({BoothFolderIcons.Count}개)", BoothFolderIcons.Enabled);
+            EditorGUILayout.HelpBox("임포트할 때 자동으로 지정돼요. 이미 있는 폴더는 프로젝트 창에서 폴더 우클릭 → Booth Import Manager → 부스 상품 연결.", MessageType.None);
+
+            EditorGUILayout.Space();
             if (GUILayout.Button("Save"))
             {
                 settings.SaveSettings();

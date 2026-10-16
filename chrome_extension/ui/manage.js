@@ -48,6 +48,7 @@ function renderAll() {
   renderRoots();
   renderProjects();
   renderTags();
+  renderTagSets();
   renderMatrix();
   renderSettings();
 }
@@ -254,7 +255,9 @@ async function saveTags(tags, projectUpdates = []) {
   if (projectUpdates.length) await saveProjects(projectUpdates);
   // 서버가 삭제된 태그를 할당에서도 빼므로 다시 읽기
   state.projects = await localApi("/api/projects?all=1");
+  state.config = await localApi("/api/config");
   renderTags();
+  renderTagSets();
   renderMatrix();
 }
 
@@ -396,6 +399,106 @@ $("importTagsBtn").addEventListener("click", async () => {
   saved(`${added.length}개 추가됨`);
 });
 
+
+// ---- 태그 세트 ------------------------------------------------------------------
+const tagName = (id) => (state.config.tags || []).find((t) => t.id === id)?.name;
+
+async function saveTagSets(sets) {
+  await saveConfig({ tagSets: sets });
+  renderTagSets();
+  renderMatrix();
+}
+
+async function applySet(set, projectKeys) {
+  const valid = new Set((state.config.tags || []).map((t) => t.id));
+  const ids = set.tags.filter((id) => valid.has(id));
+  await saveProjects(projectKeys.map((key) => ({ key, tags: ids })));
+  saved(`"${set.name}" 적용됨 (${projectKeys.length}개 프로젝트)`);
+  renderTags();
+  renderMatrix();
+}
+
+function renderTagSets() {
+  const sets = state.config.tagSets || [];
+  const visible = state.projects.filter((p) => !p.hidden);
+  $("tagSetRows").replaceChildren(
+    ...(sets.length
+      ? sets.map((set) => {
+          let armed = false;
+          const target = h("select", { "aria-label": "적용할 프로젝트" }, h("option", { value: "", text: "프로젝트 선택…" }), h("option", { value: "*", text: "모든 프로젝트" }), visible.map((p) => h("option", { value: p.key, text: p.name })));
+          return h(
+            "div",
+            { class: "set-row" },
+            h("input", {
+              type: "text",
+              value: set.name,
+              title: "세트 이름",
+              onchange: (e) => {
+                const name = e.target.value.trim();
+                if (!name) return (e.target.value = set.name);
+                saveTagSets(sets.map((x) => (x.id === set.id ? { ...x, name } : x)));
+              },
+            }),
+            h("div", { class: "set-tags" }, set.tags.map(tagName).filter(Boolean).map((n) => h("span", { class: "chip", text: n }))),
+            h(
+              "div",
+              { class: "set-tools" },
+              target,
+              h("button", {
+                class: "btn small primary",
+                text: "적용",
+                onclick: () => {
+                  if (!target.value) return;
+                  applySet(set, target.value === "*" ? visible.map((p) => p.key) : [target.value]);
+                },
+              }),
+              h("button", {
+                class: "btn small",
+                title: "현재 태그 전부로 이 세트를 덮어쓰기",
+                text: "현재 태그로 갱신",
+                onclick: () => saveTagSets(sets.map((x) => (x.id === set.id ? { ...x, tags: (state.config.tags || []).map((t) => t.id) } : x))),
+              }),
+              h("button", {
+                class: "btn small danger",
+                text: "삭제",
+                onclick: (e) => {
+                  if (!armed) {
+                    armed = true;
+                    e.target.textContent = "정말?";
+                    setTimeout(() => {
+                      armed = false;
+                      e.target.textContent = "삭제";
+                    }, 3000);
+                    return;
+                  }
+                  saveTagSets(sets.filter((x) => x.id !== set.id));
+                },
+              }),
+            ),
+          );
+        })
+      : [h("div", { class: "muted", text: "저장된 세트가 없어요." })]),
+  );
+  const src = $("newSetSource");
+  src.replaceChildren(
+    h("option", { value: "*", text: "현재 태그 전부" }),
+    visible.filter((p) => Array.isArray(p.tags)).map((p) => h("option", { value: p.key, text: `${p.name}의 태그` })),
+  );
+}
+
+$("addSetBtn").addEventListener("click", async () => {
+  const name = $("newSetName").value.trim();
+  if (!name) return fail(new Error("세트 이름을 입력하세요"));
+  const sets = state.config.tagSets || [];
+  if (sets.some((x) => x.name === name)) return fail(new Error("같은 이름의 세트가 있어요"));
+  const source = $("newSetSource").value;
+  const project = state.projects.find((p) => p.key === source);
+  const tags = project && Array.isArray(project.tags) ? [...project.tags] : (state.config.tags || []).map((t) => t.id);
+  $("newSetName").value = "";
+  await saveTagSets([...sets, { id: uid(), name, tags }]);
+  saved(`세트 "${name}" 저장됨 (태그 ${tags.length}개)`);
+});
+
 // ---- 프로젝트별 태그 매트릭스 ----------------------------------------------------
 function renderMatrix() {
   const tags = state.config.tags || [];
@@ -436,6 +539,20 @@ function renderMatrix() {
             h("button", { class: "btn small", text: "전체", onclick: () => setTags(p, tags.map((t) => t.id)) }),
             h("button", { class: "btn small", text: "해제", onclick: () => setTags(p, []) }),
           ),
+          (state.config.tagSets || []).length
+            ? h(
+                "select",
+                {
+                  title: "저장해 둔 태그 세트 적용",
+                  onchange: (e) => {
+                    const set = (state.config.tagSets || []).find((x) => x.id === e.target.value);
+                    if (set) applySet(set, [p.key]);
+                  },
+                },
+                h("option", { value: "", text: "세트 적용…" }),
+                (state.config.tagSets || []).map((x) => h("option", { value: x.id, text: x.name })),
+              )
+            : null,
           h(
             "select",
             {
