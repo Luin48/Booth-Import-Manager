@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Booth Import Manager",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "BOOTH에서 산 에셋을 클릭 한 번으로 Unity 프로젝트에 임포트하고 태그 폴더로 정리합니다. 찜목록 정리와 다크 테마 포함.",
   "homepage_url": "https://github.com/Luin48/Booth-Import-Manager",
   "permissions": [
