@@ -46,6 +46,26 @@
           "vpmDependencies": {}
         }
       }
+    },
+    "local.booth-thumbnail-matcher": {
+      "versions": {
+        "1.0.0": {
+          "name": "local.booth-thumbnail-matcher",
+          "version": "1.0.0",
+          "displayName": "BIM Thumbnail Matcher",
+          "description": "이미 설치해 둔 BOOTH 에셋 폴더를 BOOTH 라이브러리와 대조해 썸네일 아이콘을 붙입니다. (Booth Import Manager 추가 도구)",
+          "unity": "2022.3",
+          "author": {
+            "name": "Luin48",
+            "url": "https://github.com/Luin48/Booth-Import-Manager"
+          },
+          "url": "https://github.com/Luin48/Booth-Import-Manager/releases/download/v1.1.0-1/local.booth-thumbnail-matcher-1.0.0.zip",
+          "vpmDependencies": {
+            "local.booth-import-manager": ">=1.1.0"
+          },
+          "dependencies": {}
+        }
+      }
     }
   }
 }
