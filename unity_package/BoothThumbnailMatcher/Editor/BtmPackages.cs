@@ -389,8 +389,17 @@ namespace BoothThumbnailMatcher
             return map;
         }
 
-        /// <summary>원본 파일이 어느 상품인지: BIM 기록 → 옆의 .booth.json → 라이브러리 파일 이름</summary>
-        public static string ItemIdFor(string path, Dictionary<string, string> archived)
+        /// <summary>원본 파일이 어느 상품(들)인지: BIM 기록 → 옆의 .booth.json → 라이브러리 파일 이름(같은/비슷한)</summary>
+        public static List<BtmLibrary.Item> ItemsFor(string path, Dictionary<string, string> archived)
+        {
+            var id = ItemIdFor(path, archived, false);
+            if (!string.IsNullOrEmpty(id) && BtmLibrary.ById.TryGetValue(id, out var item)) return new List<BtmLibrary.Item> { item };
+            return BtmLibrary.FindByFilePath(path);
+        }
+
+        public static string ItemIdFor(string path, Dictionary<string, string> archived) => ItemIdFor(path, archived, true);
+
+        private static string ItemIdFor(string path, Dictionary<string, string> archived, bool byName)
         {
             try
             {
@@ -402,7 +411,7 @@ namespace BoothThumbnailMatcher
             }
             var side = BoothFolderIcons.ReadSidecar(path);
             if (!string.IsNullOrEmpty(side?.itemId)) return side.itemId;
-            return BtmLibrary.FindByFileName(Path.GetFileName(path))?.itemId;
+            return byName ? BtmLibrary.FindByFileName(Path.GetFileName(path))?.itemId : null;
         }
     }
 }

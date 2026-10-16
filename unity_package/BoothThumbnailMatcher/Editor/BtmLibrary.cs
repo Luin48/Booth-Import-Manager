@@ -34,6 +34,7 @@ namespace BoothThumbnailMatcher
             // ---- 비교용 (불러올 때 계산) ----
             [NonSerialized] public List<BtmText.Pre> nameVariants;   // 상품 이름 + 파일 이름 후보
             [NonSerialized] public List<BtmText.Pre> shopVariants;
+            [NonSerialized] public List<BtmText.Pre> fileVariants;   // 파일 이름 후보만 (원본 파일 → 상품 찾기용)
             [NonSerialized] public string shopKey;
 
             public string ItemUrl => $"https://booth.pm/ja/items/{itemId}";
@@ -133,6 +134,7 @@ namespace BoothThumbnailMatcher
             i.shopName = i.shopName ?? "";
             i.files = i.files ?? new List<FileInfo>();
             var names = BtmText.NameVariants(i.name);
+            i.fileVariants = BtmText.PrepareAll(i.files.SelectMany(f => BtmText.FileVariants(f.label)).Distinct());
             foreach (var f in i.files)
                 foreach (var v in BtmText.FileVariants(f.label))
                 {
@@ -152,7 +154,37 @@ namespace BoothThumbnailMatcher
             i.shopVariants = BtmText.PrepareAll(shops);
         }
 
-        /// <summary>파일 이름(원본 zip/unitypackage)으로 상품 찾기</summary>
+        /// <summary>
+        /// 원본 파일이 어느 상품인지 이름으로 추정: 정확히 같은 파일 이름 → 없으면 비슷한 이름
+        /// (버전만 다른 파일, "_1" 복사본, 압축을 푼 폴더 안의 unitypackage 등). 거의 같은 점수면 여러 개.
+        /// </summary>
+        public static List<Item> FindByFilePath(string path)
+        {
+            var exact = FindByFileName(System.IO.Path.GetFileName(path));
+            if (exact != null) return new List<Item> { exact };
+            var names = new List<string> { System.IO.Path.GetFileName(path) };
+            var parent = System.IO.Path.GetFileName(System.IO.Path.GetDirectoryName(path) ?? "");
+            if (!string.IsNullOrEmpty(parent)) names.Add(parent);
+            var probes = BtmText.PrepareAll(names.SelectMany(BtmText.FileVariants).Distinct());
+            if (probes.Count == 0) return new List<Item>();
+            var scored = new List<(Item item, double score)>();
+            foreach (var i in Items)
+            {
+                if (i.fileVariants == null || i.fileVariants.Count == 0) continue;
+                double best = 0;
+                foreach (var pr in probes)
+                {
+                    var v = BtmText.Best(pr, i.fileVariants);
+                    if (v > best) best = v;
+                }
+                if (best >= 0.85) scored.Add((i, best));
+            }
+            if (scored.Count == 0) return new List<Item>();
+            var top = scored.Max(x => x.score);
+            return scored.Where(x => x.score >= top - 0.05).OrderByDescending(x => x.score).Select(x => x.item).Take(4).ToList();
+        }
+
+        /// <summary>파일 이름(원본 zip/unitypackage)으로 상품 찾기 (정확히 같은 이름)</summary>
         public static Item FindByFileName(string fileName)
         {
             if (string.IsNullOrEmpty(fileName)) return null;

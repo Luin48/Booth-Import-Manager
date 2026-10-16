@@ -167,32 +167,35 @@ namespace BoothThumbnailMatcher
             {
                 if (rec.packages == null || rec.packages.Count == 0) continue;
                 output.packageFiles++;
-                var itemId = BtmPackages.ItemIdFor(rec.path, archived);
-                if (string.IsNullOrEmpty(itemId) || !BtmLibrary.ById.TryGetValue(itemId, out var item))
+                var found = BtmPackages.ItemsFor(rec.path, archived);
+                if (found.Count == 0)
                 {
                     output.packagesUnknown++;
                     continue;
                 }
                 var any = false;
-                foreach (var pkg in rec.packages)
+                foreach (var item in found)
                 {
-                    var all = pkg.folders.Concat(pkg.files).ToList();
-                    var present = all.Count(e => !string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(e.g)));
-                    if (present == 0) continue;
-                    var meta = new BoothFolderIcons.BoothMeta
+                    foreach (var pkg in rec.packages)
                     {
-                        itemId = item.itemId,
-                        itemName = item.name,
-                        shopName = item.shopName,
-                        fileLabel = System.IO.Path.GetFileName(rec.path),
-                        packageName = System.IO.Path.GetFileName(pkg.inner),
-                    };
-                    foreach (var (rel, kind) in BoothFolderIcons.Decide(all.Select(e => e.p), meta))
-                    {
-                        var actual = Locate("Assets/" + rel, pkg);
-                        if (string.IsNullOrEmpty(actual) || actual == "Assets" || !AssetDatabase.IsValidFolder(actual)) continue;
-                        AddGuidResult(byPath, actual, kind, item, $"원본 파일 ({System.IO.Path.GetFileName(rec.path)})");
-                        any = true;
+                        var all = pkg.folders.Concat(pkg.files).ToList();
+                        var present = all.Count(e => !string.IsNullOrEmpty(AssetDatabase.GUIDToAssetPath(e.g)));
+                        if (present == 0) continue;
+                        var meta = new BoothFolderIcons.BoothMeta
+                        {
+                            itemId = item.itemId,
+                            itemName = item.name,
+                            shopName = item.shopName,
+                            fileLabel = System.IO.Path.GetFileName(rec.path),
+                            packageName = System.IO.Path.GetFileName(pkg.inner),
+                        };
+                        foreach (var (rel, kind) in BoothFolderIcons.Decide(all.Select(e => e.p), meta))
+                        {
+                            var actual = Locate("Assets/" + rel, pkg);
+                            if (string.IsNullOrEmpty(actual) || actual == "Assets" || !AssetDatabase.IsValidFolder(actual)) continue;
+                            AddGuidResult(byPath, actual, kind, item, $"원본 파일 ({System.IO.Path.GetFileName(rec.path)})");
+                            any = true;
+                        }
                     }
                 }
                 if (any) output.packagesMatched++;
