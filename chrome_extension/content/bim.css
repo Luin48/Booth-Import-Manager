@@ -1,4 +1,57 @@
-/* Booth Import Manager — 부스 페이지에 붙는 요소. 전부 .bim- 접두사 */
+/* Booth Import Manager — 부스 페이지에 붙는 요소. 전부 .bim- 접두사
+   색은 변수로 두고, <html> 에 .bim-dark 가 붙으면 다크 팔레트로 바뀐다 (설정: 자동/켜기/끄기) */
+:root {
+  --bim-field-bg: #fff;
+  --bim-field-fg: #1f2937;
+  --bim-field-line: #d0d5dd;
+  --bim-field-off-bg: #f3f4f6;
+  --bim-field-off-fg: #9ca3af;
+  --bim-btn-bg: #2f3a45;
+  --bim-btn-hover: #1f2933;
+  --bim-btn-fg: #fff;
+  --bim-bar-bg: #f4f6f8;
+  --bim-chip-bg: #eef0f3;
+  --bim-chip-fg: #4b5563;
+  --bim-ok-bg: #e3f6ea;
+  --bim-ok-fg: #17663a;
+  --bim-wait-bg: #fff4d6;
+  --bim-wait-fg: #8a5a00;
+  --bim-err-bg: #fde7e1;
+  --bim-err-fg: #a33a17;
+  --bim-panel-bg: #fff;
+  --bim-panel-fg: #1f2937;
+  --bim-panel-head: #2f3a45;
+  --bim-panel-line: #eef0f3;
+  --bim-muted: #6b7280;
+  --bim-link: #1d6f91;
+  --bim-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+}
+html.bim-dark {
+  --bim-field-bg: #23272e;
+  --bim-field-fg: #e5e7eb;
+  --bim-field-line: #3a404a;
+  --bim-field-off-bg: #1b1e23;
+  --bim-field-off-fg: #6b7280;
+  --bim-btn-bg: #4fb7df;
+  --bim-btn-hover: #66c9f4;
+  --bim-btn-fg: #0b1f2a;
+  --bim-bar-bg: #1b1e23;
+  --bim-chip-bg: #2a2f37;
+  --bim-chip-fg: #c4c9d1;
+  --bim-ok-bg: #1f3a2b;
+  --bim-ok-fg: #7fcf9f;
+  --bim-wait-bg: #3d331c;
+  --bim-wait-fg: #f2c94c;
+  --bim-err-bg: #3f2721;
+  --bim-err-fg: #f0a07a;
+  --bim-panel-bg: #1f2329;
+  --bim-panel-fg: #e5e7eb;
+  --bim-panel-head: #111418;
+  --bim-panel-line: #2f343c;
+  --bim-muted: #9aa1ab;
+  --bim-link: #66c9f4;
+  --bim-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+}
 .bim-picker {
   display: inline-flex;
   align-items: center;
@@ -11,26 +64,26 @@
   height: 30px;
   max-width: 220px;
   padding: 0 8px;
-  border: 1px solid #d0d5dd;
+  border: 1px solid var(--bim-field-line);
   border-radius: 6px;
-  background: #fff;
-  color: #1f2937;
+  background: var(--bim-field-bg);
+  color: var(--bim-field-fg);
   font: inherit;
 }
-.bim-select:disabled { background: #f3f4f6; color: #9ca3af; }
+.bim-select:disabled { background: var(--bim-field-off-bg); color: var(--bim-field-off-fg); }
 .bim-go {
   height: 30px;
   padding: 0 12px;
   border: 0;
   border-radius: 6px;
-  background: #2f3a45;
-  color: #fff;
+  background: var(--bim-btn-bg);
+  color: var(--bim-btn-fg);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
-.bim-go:hover:not(:disabled) { background: #1f2933; }
+.bim-go:hover:not(:disabled) { background: var(--bim-btn-hover); }
 .bim-go:disabled { opacity: 0.45; cursor: default; }
 .bim-go.bim-busy { opacity: 0.6; cursor: progress; }
 .bim-compact .bim-select { height: 28px; max-width: 170px; }
@@ -52,7 +105,7 @@
   margin: 12px 0 0;
   padding: 8px 10px;
   border-radius: 8px;
-  background: #f4f6f8;
+  background: var(--bim-bar-bg);
 }
 .bim-cardbar .bim-picker { margin-left: auto; }
 .bim-logo {
@@ -71,14 +124,14 @@
   padding: 2px 8px;
   border-radius: 999px;
   font: 600 12px/1.6 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
-  background: #eef0f3;
-  color: #4b5563;
+  background: var(--bim-chip-bg);
+  color: var(--bim-chip-fg);
   white-space: nowrap;
 }
-.bim-st-imported { background: #e3f6ea; color: #17663a; }
-.bim-st-pending, .bim-st-queued { background: #fff4d6; color: #8a5a00; }
-.bim-st-failed { background: #fde7e1; color: #a33a17; }
-.bim-st-no_package { background: #eef0f3; color: #6b7280; }
+.bim-st-imported { background: var(--bim-ok-bg); color: var(--bim-ok-fg); }
+.bim-st-pending, .bim-st-queued { background: var(--bim-wait-bg); color: var(--bim-wait-fg); }
+.bim-st-failed { background: var(--bim-err-bg); color: var(--bim-err-fg); }
+.bim-st-no_package { background: var(--bim-chip-bg); color: var(--bim-muted); }
 
 .bim-banner {
   display: flex;
@@ -125,9 +178,9 @@
   width: 340px;
   max-width: calc(100vw - 32px);
   border-radius: 10px;
-  background: #fff;
-  color: #1f2937;
-  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
+  background: var(--bim-panel-bg);
+  color: var(--bim-panel-fg);
+  box-shadow: var(--bim-shadow);
   font: 13px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   overflow: hidden;
 }
@@ -136,7 +189,7 @@
   align-items: center;
   gap: 8px;
   padding: 8px 10px;
-  background: #2f3a45;
+  background: var(--bim-panel-head);
   color: #fff;
 }
 .bim-panel-title { font-weight: 700; }
@@ -153,8 +206,9 @@
 }
 .bim-panel-body { display: grid; gap: 8px; padding: 10px; }
 .bim-collapsed .bim-panel-body { display: none; }
-.bim-note { color: #6b7280; }
-.bim-warn { color: #a33a17; }
-.bim-link { color: #1d6f91; font-weight: 600; text-decoration: none; }
-.bim-free { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid #eef0f3; }
+.bim-note { color: var(--bim-muted); }
+.bim-warn { color: var(--bim-err-fg); }
+.bim-link { color: var(--bim-link); font-weight: 600; text-decoration: none; }
+.bim-free { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--bim-panel-line); }
 .bim-free-name { font-weight: 600; word-break: break-all; }
+html.bim-dark .bim-select option { background: var(--bim-field-bg); color: var(--bim-field-fg); }

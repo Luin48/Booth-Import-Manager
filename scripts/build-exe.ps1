@@ -12,6 +12,8 @@ python -m PyInstaller `
   --icon "assets\booth-import-manager-icon.ico" `
   --add-data "webui;webui" `
   --add-data "unity_package;unity_package" `
+  --add-data "assets;assets" `
+  --hidden-import pystray._win32 `
   --hidden-import tkinter `
   local_app\launcher.py `
   --distpath dist `

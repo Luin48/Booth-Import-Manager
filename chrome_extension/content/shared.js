@@ -177,6 +177,39 @@
     }
   });
 
+  // ---- 다크 모드: 설정(pageTheme) = auto | dark | light ----------------------
+  function pageLooksDark() {
+    const pick = (el) => {
+      if (!el) return null;
+      const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([^)]+)\)/);
+      if (!m) return null;
+      const [r, g, b, a = 1] = m[1].split(",").map((x) => parseFloat(x));
+      if (a === 0) return null;
+      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    };
+    const lum = pick(document.body) ?? pick(document.documentElement) ?? pick(document.querySelector("main"));
+    if (lum !== null) return lum < 0.45;
+    return window.matchMedia?.("(prefers-color-scheme: dark)").matches || false;
+  }
+  let themeSetting = "auto";
+  function applyTheme() {
+    const dark = themeSetting === "dark" || (themeSetting === "auto" && pageLooksDark());
+    document.documentElement.classList.toggle("bim-dark", dark);
+  }
+  chrome.storage.local.get("pageTheme").then(({ pageTheme }) => {
+    themeSetting = pageTheme || "auto";
+    applyTheme();
+  });
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === "local" && changes.pageTheme) {
+      themeSetting = changes.pageTheme.newValue || "auto";
+      applyTheme();
+    }
+  });
+  // 부스가 테마를 늦게 입히는 경우 대비
+  setTimeout(applyTheme, 800);
+  setTimeout(applyTheme, 2500);
+
   window.BIM = {
     send,
     el,

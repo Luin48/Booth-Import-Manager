@@ -12,7 +12,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 import booth_icons
 import booth_meta
 import projects
-from config import AppConfig, RESOURCE_DIR, Tag, UNTAGGED_TAG_NAME, ensure_special_tags, get_config, reload_config, write_bridge
+from config import APP_DIR, AppConfig, RESOURCE_DIR, Tag, UNTAGGED_TAG_NAME, ensure_special_tags, get_config, reload_config, write_bridge
 from asset_state import (
     cleanup_final_records_on_start,
     hide_record,
@@ -28,7 +28,7 @@ from queue_manager import queue_for_unity
 from tag_state import load_tag_state, remove_asset_tag, set_asset_tag
 
 
-APP_VERSION = "0.3.1"
+APP_VERSION = "0.3.2"
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -187,6 +187,32 @@ def _pick_folder(initial: str = "") -> str:
 _pick_lock = threading.Lock()
 
 
+EXTENSION_FILE = APP_DIR / "extension_id.txt"
+_known_extension = ""
+
+
+def remember_extension(origin: str) -> None:
+    """트레이의 '관리 페이지 열기'용으로 크롬 확장 ID 를 기억."""
+    global _known_extension
+    ext_id = origin.removeprefix("chrome-extension://").strip("/")
+    if not ext_id or ext_id == _known_extension:
+        return
+    _known_extension = ext_id
+    try:
+        EXTENSION_FILE.write_text(ext_id, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def known_extension() -> str:
+    if _known_extension:
+        return _known_extension
+    try:
+        return EXTENSION_FILE.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
 class AppHandler(BaseHTTPRequestHandler):
     server_version = f"BoothImportManager/{APP_VERSION}"
 
@@ -201,6 +227,7 @@ class AppHandler(BaseHTTPRequestHandler):
         if not origin:
             return True  # 같은 출처 GET, curl, 유니티 등
         if origin.startswith("chrome-extension://"):
+            remember_extension(origin)
             return True
         port = get_config().port
         return origin in (f"http://127.0.0.1:{port}", f"http://localhost:{port}")

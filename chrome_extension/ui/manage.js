@@ -627,7 +627,13 @@ async function renderSettings() {
   $("deleteLocal").checked = Boolean(c.deleteLocalAfterQueue);
   $("stayRunning").checked = c.stayRunning !== false;
   $("port").value = await getPort();
+  const { pageTheme } = await chrome.storage.local.get("pageTheme");
+  $("pageTheme").value = pageTheme || "auto";
 }
+$("pageTheme").addEventListener("change", async (e) => {
+  await chrome.storage.local.set({ pageTheme: e.target.value });
+  saved("부스 페이지 테마 적용됨");
+});
 document.querySelectorAll(".pick").forEach((btn) =>
   btn.addEventListener("click", async () => {
     const input = $(btn.dataset.target);
@@ -652,6 +658,7 @@ $("saveSettingsBtn").addEventListener("click", async () => {
     saved("포트 변경됨 — 로컬 앱을 다시 실행하세요");
   }
 });
+$("reloadExtBtn").addEventListener("click", () => chrome.runtime.reload());
 $("quitBtn").addEventListener("click", async () => {
   await localApi("/api/shutdown", { method: "POST", body: { reason: "user" } }).catch(() => {});
   setTimeout(load, 800);

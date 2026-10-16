@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Booth Import Manager",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "BOOTH 라이브러리에서 바로 Unity로 임포트하고, 받은 파일과 찜목록을 관리합니다.",
   "permissions": [
     "downloads",

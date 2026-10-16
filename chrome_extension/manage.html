@@ -135,6 +135,16 @@
           <label>공용 큐 폴더 <span class="muted">(v0.2 방식, 프로젝트를 안 고르고 보낼 때)</span>
             <div class="row"><input id="queueFolder" type="text" class="grow" /><button class="btn pick" data-target="queueFolder">선택…</button></div>
           </label>
+          <h2>부스 페이지 표시</h2>
+          <label>버튼·패널 테마 <span class="muted">(바꾸면 열려 있는 부스 탭에도 바로 적용)</span>
+            <div class="row">
+              <select id="pageTheme" style="width: 260px">
+                <option value="auto">자동 — 부스 화면이 어두우면 다크</option>
+                <option value="dark">다크 모드 켜기</option>
+                <option value="light">다크 모드 끄기 (밝게)</option>
+              </select>
+            </div>
+          </label>
           <h2>동작</h2>
           <label class="check"><input id="autoQueue" type="checkbox" /> 'Unity로' 버튼: 다운로드가 끝나면 바로 큐에 넣기</label>
           <label class="check"><input id="deleteLocal" type="checkbox" /> 큐에 넣은 뒤 보관 폴더의 원본 삭제</label>
@@ -144,6 +154,7 @@
           </label>
           <div class="row wrap">
             <button id="saveSettingsBtn" class="btn primary">설정 저장</button>
+            <button id="reloadExtBtn" class="btn" title="확장 폴더의 파일을 새 버전으로 바꾼 뒤 누르세요">크롬 확장 다시 불러오기</button>
             <button id="quitBtn" class="btn danger">로컬 앱 종료</button>
           </div>
         </div>

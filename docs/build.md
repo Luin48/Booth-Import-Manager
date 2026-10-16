@@ -11,7 +11,7 @@
 - Windows, Python 3.12+
 
 ```powershell
-python -m pip install pyinstaller pillow
+python -m pip install pyinstaller pillow pystray
 .\scripts\build-exe.ps1                       # dist\BoothImportManager.exe
 python scripts\make_unitypackage.py           # dist\BoothImportManager.unitypackage
 ```
