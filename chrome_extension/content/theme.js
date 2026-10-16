@@ -11,8 +11,8 @@
   const ROOT = document.documentElement;
   const FLAG_KEY = "bim-booth-theme"; // 페이지 localStorage: 첫 페인트 전에 동기적으로 읽기용
   const CACHE_PREFIX = "darkcss:";
-  const CACHE_VERSION = "v1";
-  const BG = "#16181c";
+  const CACHE_VERSION = "v2";
+  const BG = "#141414";
 
   // ---- 색 계산 -------------------------------------------------------------
   const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
@@ -99,11 +99,11 @@
   function mapBg(c) {
     const [h, s, l] = rgbToHsl(...c.rgb);
     if (c.a < 1 && l < 0.15) return formatColor([255, 255, 255], Math.min(c.a * 1.6, 0.6), c.alphaRaw); // 검정 반투명 → 흰색 반투명
-    if (l < 0.3) return null; // 이미 어두움(푸터, 모달 딤 등)
+    if (l < 0.3) return s > 0.04 && s < 0.5 ? formatColor(hslToRgb(h, 0, l), c.a, c.alphaRaw) : null; // 이미 어두움 → 푸른 기만 빼기
     if (s > 0.45 && l < 0.8) return null; // 브랜드 색 버튼(빨간 장바구니 등)은 그대로
     // 아주 밝은 면(흰 카드 / 연회색 바탕)은 순서를 살짝 뒤집어 카드가 바탕보다 조금 밝게 (다크 UI 관례)
     const nl = l >= 0.9 ? 0.1 + (l - 0.9) * 0.45 : clamp(0.1 + (0.9 - l) * 0.3, 0.1, 0.28);
-    return formatColor(hslToRgb(h, Math.min(s, 0.55) * 0.6, nl), c.a, c.alphaRaw);
+    return formatColor(hslToRgb(h, 0, nl), c.a, c.alphaRaw); // 무채색 (푸른 기 없이 검정 계열)
   }
 
   // 글자: 어두운 글자는 밝게(진할수록 더 밝게), 원래 연한 글자는 조금 덜 밝게
@@ -115,7 +115,7 @@
       // 색 있는 글자(링크·가격 등)는 색상 유지하고 밝기만 올림
       return formatColor(hslToRgb(h, Math.min(s, 0.85), clamp(1 - l * 0.55, 0.66, 0.82)), c.a, c.alphaRaw);
     }
-    return formatColor(hslToRgb(h, s * 0.4, clamp(0.94 - l * 0.45, 0.66, 0.92)), c.a, c.alphaRaw);
+    return formatColor(hslToRgb(h, 0, clamp(0.94 - l * 0.45, 0.66, 0.92)), c.a, c.alphaRaw);
   }
 
   function mapBorder(c) {
@@ -123,7 +123,7 @@
     if (c.a < 1 && l < 0.2) return formatColor([255, 255, 255], clamp(c.a * 1.4, 0.08, 0.3), c.alphaRaw);
     if (l < 0.35) return null;
     if (s > 0.45 && l < 0.7) return null;
-    return formatColor(hslToRgb(h, s * 0.4, clamp(0.16 + (1 - l) * 0.4, 0.18, 0.32)), c.a, c.alphaRaw);
+    return formatColor(hslToRgb(h, 0, clamp(0.16 + (1 - l) * 0.4, 0.18, 0.32)), c.a, c.alphaRaw);
   }
 
   function mapValue(value, mapper) {
@@ -210,15 +210,15 @@
   // ---- 기본 스타일 (모든 부스 페이지 공통) --------------------------------------
   const BASE_CSS = `
 html.bim-site-dark { color-scheme: dark; background: ${BG} !important; }
-html.bim-site-dark body { background-color: ${BG} !important; color: #e6e8eb; }
-html.bim-site-dark ::selection { background: #2f6f95; color: #fff; }
+html.bim-site-dark body { background-color: ${BG} !important; color: #e8e8e8; }
+html.bim-site-dark ::selection { background: #3a5f7a; color: #fff; }
 html.bim-site-dark input, html.bim-site-dark textarea, html.bim-site-dark select {
-  background-color: #23272e; color: #e6e8eb; border-color: #3a404a;
+  background-color: #232323; color: #e8e8e8; border-color: #3d3d3d;
 }
-html.bim-site-dark input::placeholder, html.bim-site-dark textarea::placeholder { color: #8b929c !important; }
+html.bim-site-dark input::placeholder, html.bim-site-dark textarea::placeholder { color: #8f8f8f !important; }
 html.bim-site-dark img:not([src*=".svg"]) { filter: brightness(0.94); }
 html.bim-site-dark ::-webkit-scrollbar { background: ${BG}; }
-html.bim-site-dark ::-webkit-scrollbar-thumb { background: #3a404a; border-radius: 6px; }
+html.bim-site-dark ::-webkit-scrollbar-thumb { background: #3d3d3d; border-radius: 6px; }
 `;
 
   // ---- 적용 / 해제 -----------------------------------------------------------
@@ -411,7 +411,7 @@ html.bim-site-dark ::-webkit-scrollbar-thumb { background: #3a404a; border-radiu
     if (bs > 0.4 && bl > 0.3 && bl < 0.8) return; // 색 있는 버튼 위 글자는 원래 디자인 유지
     const light = [230, 232, 235];
     const dark = [31, 31, 31];
-    writes.push([el, "color", contrast(light, bg) >= contrast(dark, bg) ? "#e6e8eb" : "#1f1f1f", true]);
+    writes.push([el, "color", contrast(light, bg) >= contrast(dark, bg) ? "#e8e8e8" : "#1f1f1f", true]);
   }
 
   function applyWrites(writes) {

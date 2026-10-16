@@ -41,7 +41,7 @@ tr.is-hidden { opacity: 0.5; }
 
 .tag-row {
   display: grid;
-  grid-template-columns: 30px 1fr auto auto;
+  grid-template-columns: 22px 1fr auto auto;
   gap: 8px;
   align-items: center;
   padding: 6px 8px;
@@ -73,3 +73,6 @@ tr.is-hidden { opacity: 0.5; }
 .set-row .set-tools { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .set-row .set-tools select { height: 24px; font-size: 12px; }
 @media (max-width: 760px) { .set-row { grid-template-columns: 1fr; } .set-row .set-tools { justify-content: flex-start; } }
+
+.tag-check { width: 16px; height: 16px; }
+.check-bar { gap: 12px; padding: 4px 8px 8px; font-size: 13px; }

@@ -27,28 +27,28 @@
   --bim-shadow: 0 12px 32px rgba(15, 23, 42, 0.22);
 }
 html.bim-dark {
-  --bim-field-bg: #23272e;
-  --bim-field-fg: #e5e7eb;
-  --bim-field-line: #3a404a;
-  --bim-field-off-bg: #1b1e23;
+  --bim-field-bg: #262626;
+  --bim-field-fg: #e6e6e6;
+  --bim-field-line: #3d3d3d;
+  --bim-field-off-bg: #1c1c1c;
   --bim-field-off-fg: #6b7280;
   --bim-btn-bg: #4fb7df;
   --bim-btn-hover: #66c9f4;
   --bim-btn-fg: #0b1f2a;
-  --bim-bar-bg: #1b1e23;
-  --bim-chip-bg: #2a2f37;
-  --bim-chip-fg: #c4c9d1;
+  --bim-bar-bg: #1c1c1c;
+  --bim-chip-bg: #2b2b2b;
+  --bim-chip-fg: #cfcfcf;
   --bim-ok-bg: #1f3a2b;
   --bim-ok-fg: #7fcf9f;
   --bim-wait-bg: #3d331c;
   --bim-wait-fg: #f2c94c;
   --bim-err-bg: #3f2721;
   --bim-err-fg: #f0a07a;
-  --bim-panel-bg: #1f2329;
-  --bim-panel-fg: #e5e7eb;
-  --bim-panel-head: #111418;
-  --bim-panel-line: #2f343c;
-  --bim-muted: #9aa1ab;
+  --bim-panel-bg: #202020;
+  --bim-panel-fg: #e6e6e6;
+  --bim-panel-head: #141414;
+  --bim-panel-line: #333333;
+  --bim-muted: #a3a3a3;
   --bim-link: #66c9f4;
   --bim-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
 }
@@ -253,3 +253,14 @@ html.bim-dark .bim-select option { background: var(--bim-field-bg); color: var(-
 }
 .bim-libbar-label { font-weight: 700; margin-right: 4px; }
 .bim-libbar-check { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--bim-muted); cursor: pointer; }
+
+/* 프로젝트 실행 상태 표시 (선택기 왼쪽) */
+.bim-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; flex: 0 0 10px; margin: 0 2px 0 0; background: #9ca3af; box-shadow: 0 0 0 2px rgba(0,0,0,0.06); vertical-align: middle; cursor: help; }
+.bim-dot-on { background: #22c55e; box-shadow: 0 0 0 3px rgba(34,197,94,0.22); }
+.bim-dot-off { background: #ef4444; box-shadow: 0 0 0 3px rgba(239,68,68,0.2); }
+.bim-dot-none { background: #9ca3af; }
+.bim-dot-unknown { background: #f59e0b; }
+
+.bim-libbar-size { display: inline-flex; align-items: center; gap: 6px; margin-left: 14px; font-size: 12px; color: var(--bim-muted); }
+.bim-libbar-size .bim-select { min-width: 64px; }
+.bim-loading-more { padding: 18px; text-align: center; font-size: 13px; color: var(--bim-muted); border: 1px dashed var(--bim-field-line); border-radius: 8px; }

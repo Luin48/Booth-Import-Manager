@@ -239,6 +239,8 @@ def list_projects(include_hidden: bool = True, deep: bool = True) -> list[dict]:
         }
         if deep:
             item["installed"] = find_installed(path)
+            item["installedVersion"] = package_version(path / "Packages" / PACKAGE_NAME) if item["installed"] == "packages" else ""
+            item["latestVersion"] = package_version(package_source())
         out.append(item)
     return out
 
@@ -275,17 +277,49 @@ def install_package(path: str) -> dict:
         raise FileNotFoundError(f"패키지 원본이 없어요: {src}")
 
     installed = find_installed(project)
+    migrated = ""
     if installed.startswith("assets:"):
-        # 예전 방식(Assets 안에 복사)으로 이미 있으면 그 자리를 갱신 — 두 벌이면 컴파일 에러가 나므로
-        target = project / installed.removeprefix("assets:")
-        editor_src = src / "Editor"
-        for f in editor_src.iterdir():
-            if f.suffix in (".cs", ".asmdef"):
-                shutil.copy2(f, target / f.name)
-        return {"mode": "updated-in-assets", "path": str(target)}
-
+        # 예전 방식(Assets 안에 복사)은 지우고 Packages 로 옮긴다 — 두 벌이면 컴파일 에러가 나므로
+        migrated = installed.removeprefix("assets:")
+        _remove_assets_copy(project / migrated)
     target = project / "Packages" / PACKAGE_NAME
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(src, target, ignore=shutil.ignore_patterns("*.meta"))
-    return {"mode": "packages", "path": str(target)}
+    return {"mode": "migrated" if migrated else "packages", "path": str(target), "version": package_version(target), "from": migrated}
+
+
+OUR_FILES = {
+    "BoothQueueWatcher", "BoothPackageImporter", "BoothImportSettings", "BoothImportWindow",
+    "BoothProjectKey", "BoothFolderIcons", "BoothImportManager.Editor", "BoothImportManager",
+}
+
+
+def _remove_assets_copy(editor_dir: Path) -> None:
+    """Assets 안의 예전 BIM 스크립트(.cs/.asmdef + .meta)만 지우고, 비면 폴더도 정리."""
+    if not editor_dir.is_dir():
+        return
+    for f in list(editor_dir.iterdir()):
+        stem = f.name.removesuffix(".meta")
+        base = stem.rsplit(".", 1)[0] if stem.endswith((".cs", ".asmdef")) else ""
+        if base in OUR_FILES or stem in OUR_FILES:
+            f.unlink(missing_ok=True)
+    parent = editor_dir.parent
+    pkg = parent / "package.json"
+    if parent.name != "Assets" and pkg.exists() and PACKAGE_NAME in pkg.read_text(encoding="utf-8", errors="ignore"):
+        pkg.unlink(missing_ok=True)
+        (parent / "package.json.meta").unlink(missing_ok=True)
+    for d in (editor_dir, parent):
+        if d.name == "Assets" or not d.is_dir():
+            break
+        if any(d.iterdir()):
+            break
+        d.rmdir()
+        Path(str(d) + ".meta").unlink(missing_ok=True)
+
+
+def package_version(pkg_dir: Path) -> str:
+    try:
+        return json.loads((pkg_dir / "package.json").read_text(encoding="utf-8")).get("version", "")
+    except (OSError, ValueError):
+        return ""

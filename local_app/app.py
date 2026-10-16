@@ -28,7 +28,7 @@ from queue_manager import queue_for_unity
 from tag_state import load_tag_state, remove_asset_tag, set_asset_tag
 
 
-APP_VERSION = "0.3.3"
+APP_VERSION = "0.3.4"
 
 
 def _is_within(path: Path, root: Path) -> bool:
@@ -268,7 +268,7 @@ class AppHandler(BaseHTTPRequestHandler):
         elif path == "/api/config":
             self._json(_config_payload())
         elif path == "/api/projects":
-            self._json(projects.list_projects(include_hidden=query.get("all", ["1"])[0] == "1"))
+            self._json(projects.list_projects(include_hidden=query.get("all", ["1"])[0] == "1", deep=query.get("deep", ["1"])[0] != "0"))
         elif path == "/api/projects/suggest":
             self._json(projects.suggest_roots())
         elif path.startswith("/api/projects/") and path.endswith("/queue"):
@@ -579,7 +579,28 @@ class AppHandler(BaseHTTPRequestHandler):
         self._json({"status": "shutting_down"})
         threading.Thread(target=self.server.shutdown, daemon=True).start()
 
+    def _landing(self) -> None:
+        """예전 웹 화면 대신: 크롬 확장 관리 페이지로 보내는 안내 페이지."""
+        ext_id = known_extension()
+        target = f"chrome-extension://{ext_id}/manage.html" if ext_id else ""
+        body = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8"><title>Booth Import Manager</title>
+<style>body{{font-family:'Malgun Gothic',sans-serif;background:#141414;color:#e8e8e8;display:grid;place-items:center;min-height:100vh;margin:0}}
+main{{max-width:520px;padding:28px;background:#1f1f1f;border:1px solid #333;border-radius:12px;line-height:1.6}}a{{color:#7cc4ff}}</style></head>
+<body><main><h2>Booth Import Manager v{APP_VERSION}</h2>
+<p>로컬 앱이 트레이에서 실행 중이에요. 설정은 크롬 확장의 <b>관리 페이지</b>에서 해요.</p>
+{f'<p><a id="go" href="{target}">관리 페이지 열기</a></p><script>location.replace("{target}")</script>' if target else
+ '<p>크롬에서 부스 페이지를 한 번 열거나 확장 아이콘을 눌러 주세요. 확장이 연결되면 다음부터는 트레이 메뉴에서 관리 페이지가 바로 열려요.</p>'}
+</main></body></html>""".encode("utf-8")
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _static(self, path: str) -> None:
+        if path in ("/", "/index.html"):
+            self._landing()
+            return
         root = RESOURCE_DIR / "webui"
         rel = "index.html" if path == "/" else unquote(path).lstrip("/")
         target = (root / rel).resolve()

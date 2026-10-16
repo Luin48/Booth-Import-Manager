@@ -9,6 +9,7 @@ const h = (tag, attrs = {}, ...children) => {
     else if (k === "text") node.textContent = v;
     else if (k === "value") node.value = v;
     else if (k === "checked") node.checked = Boolean(v);
+    else if (k === "indeterminate") node.indeterminate = Boolean(v);
     else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
     else node.setAttribute(k, v === true ? "" : v);
   }
@@ -162,25 +163,48 @@ function packageCell(p) {
     btn.textContent = "설치 중…";
     try {
       const res = await localApi("/api/projects/install", { method: "POST", body: { key: p.key } });
-      saved(res.mode === "packages" ? `${p.name}: 설치됨 (유니티가 켜져 있으면 자동 컴파일)` : `${p.name}: 기존 위치 업데이트됨`);
-      load();
+      const ver = res.version ? ` v${res.version}` : "";
+      saved(
+        res.mode === "migrated"
+          ? `${p.name}: Assets 안의 예전 복사본을 지우고 Packages로 옮겼어요${ver}`
+          : `${p.name}: 설치됨${ver}${p.running ? " — 유니티가 곧 다시 컴파일해요" : " — 다음에 유니티를 켜면 적용돼요"}`,
+      );
+      await load();
     } catch (error) {
       fail(error);
       btn.disabled = false;
+      btn.textContent = "다시 시도";
     }
   };
+  const latest = p.latestVersion || "";
   if (p.installed === "packages") {
-    return h("div", { class: "row wrap" }, h("span", { class: "chip ok", text: p.packageVersion ? `설치됨 v${p.packageVersion}` : "설치됨" }), h("button", { class: "btn small", text: "재설치", onclick: (e) => install(e.target) }));
+    const cur = p.installedVersion || p.packageVersion || "";
+    const outdated = latest && cur && cur !== latest;
+    return h(
+      "div",
+      { class: "row wrap" },
+      h("span", { class: `chip ${outdated ? "warn" : "ok"}`, text: cur ? `설치됨 v${cur}` : "설치됨" }),
+      h("button", {
+        class: `btn small${outdated ? " primary" : ""}`,
+        text: outdated ? `v${latest}로 업데이트` : "재설치",
+        onclick: (e) => install(e.target),
+      }),
+    );
   }
   if (p.installed?.startsWith("assets:")) {
     return h(
       "div",
       { class: "row wrap" },
-      h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (이전 방식)" }),
-      h("button", { class: "btn small", text: "v0.3로 업데이트", onclick: (e) => install(e.target) }),
+      h("span", { class: "chip warn", title: p.installed.slice(7), text: "Assets 안 (예전 방식)" }),
+      h("button", {
+        class: "btn small primary",
+        title: "Assets 안의 예전 복사본을 지우고 Packages 폴더에 새로 설치해요",
+        text: latest ? `v${latest}로 업데이트` : "업데이트",
+        onclick: (e) => install(e.target),
+      }),
     );
   }
-  return h("button", { class: "btn small primary", text: "설치", onclick: (e) => install(e.target) });
+  return h("button", { class: "btn small primary", text: latest ? `설치 (v${latest})` : "설치", onclick: (e) => install(e.target) });
 }
 
 function renderProjects() {
@@ -261,8 +285,40 @@ async function saveTags(tags, projectUpdates = []) {
   renderMatrix();
 }
 
+const checkedTags = new Set();
+
+function checkedTagIds() {
+  // 라이브러리 순서 유지 + 지워진 태그 제외
+  return (state.config.tags || []).map((t) => t.id).filter((id) => checkedTags.has(id));
+}
+
+function renderCheckBar() {
+  const tags = state.config.tags || [];
+  const n = checkedTagIds().length;
+  $("tagCheckBar").replaceChildren(
+    h("label", { class: "row" },
+      h("input", {
+        type: "checkbox",
+        checked: n > 0 && n === tags.length,
+        indeterminate: n > 0 && n < tags.length,
+        onchange: (e) => {
+          checkedTags.clear();
+          if (e.target.checked) tags.forEach((t) => checkedTags.add(t.id));
+          if (checkedTags.size) $("newSetSource").value = "checked";
+          renderTags();
+        },
+      }),
+      h("span", { text: n ? `${n}개 체크됨` : "전체 선택" }),
+    ),
+    h("span", { class: "muted", text: "체크한 태그로 아래 태그 세트를 만들거나 갱신할 수 있어요." }),
+  );
+  const src = $("newSetSource");
+  if (src && src.firstElementChild?.value === "checked") src.firstElementChild.textContent = `체크한 태그 (${n}개)`;
+}
+
 function renderTags() {
   const tags = state.config.tags || [];
+  for (const id of [...checkedTags]) if (!tags.some((t) => t.id === id)) checkedTags.delete(id);
   $("tagRows").replaceChildren(
     ...tags.map((tag, index) => {
       const special = tag.name === UNTAGGED;
@@ -271,10 +327,16 @@ function renderTags() {
         "div",
         { class: "tag-row" },
         h("input", {
-          type: "color",
-          value: tag.color || "#2563eb",
-          title: "색상",
-          onchange: (e) => saveTags(tags.map((t) => (t.id === tag.id ? { ...t, color: e.target.value } : t))),
+          type: "checkbox",
+          class: "tag-check",
+          checked: checkedTags.has(tag.id),
+          title: "태그 세트에 넣을 태그로 체크",
+          onchange: (e) => {
+            if (e.target.checked) checkedTags.add(tag.id);
+            else checkedTags.delete(tag.id);
+            if (checkedTags.size) $("newSetSource").value = "checked";
+            renderCheckBar();
+          },
         }),
         h("input", {
           type: "text",
@@ -326,6 +388,8 @@ function renderTags() {
     }),
   );
 
+  renderCheckBar();
+
   function move(index, delta) {
     const next = [...tags];
     const [item] = next.splice(index, 1);
@@ -343,7 +407,7 @@ function uniqueName(base) {
 
 async function duplicateTag(tag) {
   const tags = state.config.tags || [];
-  const copy = { id: uid(), name: uniqueName(`${tag.name} 복사`), color: tag.color };
+  const copy = { id: uid(), name: uniqueName(`${tag.name} 복사`) };
   const index = tags.findIndex((t) => t.id === tag.id);
   const next = [...tags.slice(0, index + 1), copy, ...tags.slice(index + 1)];
   const updates = state.projects.filter((p) => Array.isArray(p.tags) && p.tags.includes(tag.id)).map((p) => ({ key: p.key, tags: [...p.tags, copy.id] }));
@@ -354,7 +418,7 @@ $("addTagBtn").addEventListener("click", async () => {
   const name = $("newTagName").value.trim();
   if (!name) return;
   if ((state.config.tags || []).some((t) => t.name === name)) return fail(new Error("이미 있는 태그예요"));
-  const tag = { id: uid(), name, color: $("newTagColor").value };
+  const tag = { id: uid(), name };
   const updates = $("newTagAssignAll").checked
     ? state.projects.filter((p) => Array.isArray(p.tags)).map((p) => ({ key: p.key, tags: [...p.tags, tag.id] }))
     : [];
@@ -364,7 +428,7 @@ $("addTagBtn").addEventListener("click", async () => {
 $("newTagName").addEventListener("keydown", (e) => e.key === "Enter" && $("addTagBtn").click());
 
 $("exportTagsBtn").addEventListener("click", async () => {
-  const text = JSON.stringify((state.config.tags || []).map(({ name, color }) => ({ name, color })), null, 2);
+  const text = JSON.stringify((state.config.tags || []).map(({ name }) => name), null, 2);
   $("tagTransfer").value = text;
   try {
     await navigator.clipboard.writeText(text);
@@ -393,7 +457,7 @@ $("importTagsBtn").addEventListener("click", async () => {
   const existing = new Set((state.config.tags || []).map((t) => t.name));
   const added = incoming
     .filter((t) => t.name && !existing.has(t.name.trim()))
-    .map((t) => ({ id: uid(), name: t.name.trim(), color: /^#[0-9a-f]{6}$/i.test(t.color || "") ? t.color : "#64748b" }));
+    .map((t) => ({ id: uid(), name: t.name.trim() }));
   if (!added.length) return saved("새로 추가할 태그가 없어요");
   await saveTags([...(state.config.tags || []), ...added]);
   saved(`${added.length}개 추가됨`);
@@ -454,9 +518,25 @@ function renderTagSets() {
               }),
               h("button", {
                 class: "btn small",
-                title: "현재 태그 전부로 이 세트를 덮어쓰기",
-                text: "현재 태그로 갱신",
-                onclick: () => saveTagSets(sets.map((x) => (x.id === set.id ? { ...x, tags: (state.config.tags || []).map((t) => t.id) } : x))),
+                title: "이 세트의 태그를 위 태그 라이브러리에 체크로 불러오기",
+                text: "체크로 불러오기",
+                onclick: () => {
+                  checkedTags.clear();
+                  set.tags.forEach((id) => checkedTags.add(id));
+                  renderTags();
+                  saved(`"${set.name}" 태그를 체크했어요`);
+                },
+              }),
+              h("button", {
+                class: "btn small",
+                title: "태그 라이브러리에서 체크한 태그로 이 세트를 덮어쓰기",
+                text: "체크한 태그로 갱신",
+                onclick: () => {
+                  const ids = checkedTagIds();
+                  if (!ids.length) return fail(new Error("태그 라이브러리에서 태그를 먼저 체크하세요"));
+                  saveTagSets(sets.map((x) => (x.id === set.id ? { ...x, tags: ids } : x)));
+                  saved(`"${set.name}" 갱신됨 (태그 ${ids.length}개)`);
+                },
               }),
               h("button", {
                 class: "btn small danger",
@@ -480,21 +560,34 @@ function renderTagSets() {
       : [h("div", { class: "muted", text: "저장된 세트가 없어요." })]),
   );
   const src = $("newSetSource");
+  const prev = src.value;
   src.replaceChildren(
+    h("option", { value: "checked", text: `체크한 태그 (${checkedTagIds().length}개)` }),
     h("option", { value: "*", text: "현재 태그 전부" }),
     visible.filter((p) => Array.isArray(p.tags)).map((p) => h("option", { value: p.key, text: `${p.name}의 태그` })),
   );
+  if ([...src.options].some((o) => o.value === prev)) src.value = prev;
 }
 
 $("addSetBtn").addEventListener("click", async () => {
   const name = $("newSetName").value.trim();
   if (!name) return fail(new Error("세트 이름을 입력하세요"));
   const sets = state.config.tagSets || [];
-  if (sets.some((x) => x.name === name)) return fail(new Error("같은 이름의 세트가 있어요"));
   const source = $("newSetSource").value;
   const project = state.projects.find((p) => p.key === source);
-  const tags = project && Array.isArray(project.tags) ? [...project.tags] : (state.config.tags || []).map((t) => t.id);
+  const tags =
+    source === "checked"
+      ? checkedTagIds()
+      : project && Array.isArray(project.tags)
+        ? [...project.tags]
+        : (state.config.tags || []).map((t) => t.id);
+  if (!tags.length) return fail(new Error("체크한 태그가 없어요"));
+  const existingSet = sets.find((x) => x.name === name);
   $("newSetName").value = "";
+  if (existingSet) {
+    await saveTagSets(sets.map((x) => (x.id === existingSet.id ? { ...x, tags } : x)));
+    return saved(`세트 "${name}" 갱신됨 (태그 ${tags.length}개)`);
+  }
   await saveTagSets([...sets, { id: uid(), name, tags }]);
   saved(`세트 "${name}" 저장됨 (태그 ${tags.length}개)`);
 });
@@ -575,7 +668,7 @@ function renderMatrix() {
     h(
       "tr",
       {},
-      h("td", { class: "tagname" }, h("span", { class: "row" }, h("span", { class: "tag-swatch", style: `background:${tag.color}` }), tag.name)),
+      h("td", { class: "tagname" }, tag.name),
       projects.map((p) => {
         const unrestricted = !Array.isArray(p.tags);
         const on = unrestricted || p.tags.includes(tag.id) || tag.name === UNTAGGED;

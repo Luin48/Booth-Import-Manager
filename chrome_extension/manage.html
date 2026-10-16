@@ -82,9 +82,9 @@
         <div class="card block">
           <h2>태그 라이브러리</h2>
           <p class="muted">태그 이름이 유니티 안의 폴더 이름이 돼요 (<code>Asset root/태그/…</code>). "태그 없음"은 Asset root 바로 아래로 들어가요.</p>
+          <div id="tagCheckBar" class="row wrap check-bar"></div>
           <div id="tagRows" class="stack"></div>
           <div class="row wrap add-tag">
-            <input id="newTagColor" type="color" value="#2563eb" />
             <input id="newTagName" type="text" class="grow" placeholder="새 태그 이름 (예: 06.이펙트)" />
             <label class="row muted"><input id="newTagAssignAll" type="checkbox" checked /> 모든 프로젝트에 추가</label>
             <button id="addTagBtn" class="btn primary">추가</button>
@@ -97,7 +97,7 @@
           <div class="row wrap">
             <input id="newSetName" type="text" class="grow" placeholder="세트 이름 (예: 아바타 프로젝트용 공용 태그)" />
             <select id="newSetSource" aria-label="세트로 만들 태그"></select>
-            <button id="addSetBtn" class="btn primary">세트로 저장</button>
+            <button id="addSetBtn" class="btn primary" title="같은 이름의 세트가 있으면 덮어써요">세트로 추가 / 갱신</button>
           </div>
         </div>
         <div class="card block">

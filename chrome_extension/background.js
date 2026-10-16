@@ -169,11 +169,17 @@ async function handle(msg, sender) {
       // 콘텐츠 스크립트용: 태그 + 프로젝트 + 마지막 선택값
       const [config, projectList, prefs] = await Promise.all([
         localApi("/api/config"),
-        localApi("/api/projects?all=0"),
+        localApi("/api/projects?all=0&deep=0"),
         chrome.storage.local.get(["lastProject", "lastTagByProject"]),
       ]);
-      return { config, projects: projectList, lastProject: prefs.lastProject || "", lastTagByProject: prefs.lastTagByProject || {} };
+      const boot = { config, projects: projectList, lastProject: prefs.lastProject || "", lastTagByProject: prefs.lastTagByProject || {} };
+      // 다음 페이지에서 바로 그릴 수 있게 캐시 (콘텐츠 스크립트가 먼저 이걸로 그리고, 응답이 오면 갱신)
+      chrome.storage.local.set({ bootCache: { config, projects: projectList, at: Date.now() } }).catch(() => {});
+      return boot;
     }
+    case "projectsLive":
+      // 실행 중/꺼짐 실시간 표시용 (가벼운 조회)
+      return localApi("/api/projects?all=0&deep=0");
     case "rememberChoice": {
       const prefs = await chrome.storage.local.get("lastTagByProject");
       const map = prefs.lastTagByProject || {};
@@ -224,3 +230,14 @@ async function handle(msg, sender) {
       throw new Error(`unknown message ${msg.type}`);
   }
 }
+
+// 업데이트 때 예전 버전의 다크 테마 CSS 캐시 정리
+chrome.runtime.onInstalled.addListener(async () => {
+  try {
+    const all = await chrome.storage.local.get(null);
+    const stale = Object.keys(all).filter((k) => k.startsWith("darkcss:") && !k.startsWith("darkcss:v2"));
+    if (stale.length) await chrome.storage.local.remove(stale);
+  } catch {
+    /* ignore */
+  }
+});

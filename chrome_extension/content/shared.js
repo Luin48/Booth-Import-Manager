@@ -27,21 +27,64 @@
 
   const state = { boot: null, bootPromise: null, listeners: new Set() };
 
+  const pickers = new Set(); // 화면에 있는 선택기들 (프로젝트 목록/상태 갱신용)
+
+  function fetchBoot() {
+    return send("bootstrap").then((boot) => {
+      state.boot = boot;
+      for (const p of pickers) p.refill();
+      return boot;
+    });
+  }
+
+  // 1) 지난번에 받아둔 캐시로 즉시 그리고 2) 로컬 앱 응답이 오면 갱신한다 → 페이지 이동 때 바로 뜸
   async function bootstrap(force = false) {
     if (state.boot && !force) return state.boot;
     if (!state.bootPromise || force) {
-      state.bootPromise = send("bootstrap")
-        .then((boot) => {
-          state.boot = boot;
-          return boot;
-        })
-        .catch((error) => {
-          state.bootPromise = null;
-          throw error;
-        });
+      state.bootPromise = (async () => {
+        const fresh = fetchBoot();
+        if (!force) {
+          try {
+            const cached = await chrome.storage.local.get(["bootCache", "lastProject", "lastTagByProject"]);
+            if (cached.bootCache?.config && Array.isArray(cached.bootCache.projects)) {
+              state.boot = {
+                config: cached.bootCache.config,
+                projects: cached.bootCache.projects,
+                lastProject: cached.lastProject || "",
+                lastTagByProject: cached.lastTagByProject || {},
+                cached: true,
+              };
+              fresh.catch(() => {});
+              return state.boot;
+            }
+          } catch {
+            /* 캐시 없음 */
+          }
+        }
+        return fresh;
+      })().catch((error) => {
+        state.bootPromise = null;
+        throw error;
+      });
     }
     return state.bootPromise;
   }
+
+  // 유니티 실행 중/꺼짐 실시간 반영
+  async function refreshLive() {
+    if (!state.boot || !pickers.size || document.visibilityState !== "visible") return;
+    try {
+      const list = await send("projectsLive");
+      const byKey = new Map(list.map((p) => [p.key, p]));
+      const sameSet = list.length === state.boot.projects.length && state.boot.projects.every((p) => byKey.has(p.key));
+      state.boot.projects = list;
+      for (const p of pickers) (sameSet ? p.updateLive : p.refill)();
+    } catch {
+      for (const p of pickers) p.updateLive(true);
+    }
+  }
+  setInterval(refreshLive, 4000);
+  document.addEventListener("visibilitychange", refreshLive);
 
   const UNTAGGED = "태그 없음";
 
@@ -55,13 +98,7 @@
     return all.filter((t) => allowed.has(t.id) || t.name === UNTAGGED);
   }
 
-  function projectLabel(p) {
-    const bits = [p.name];
-    if (p.running) bits.push("● 실행 중");
-    else bits.push("○ 꺼짐");
-    if (p.pending) bits.push(`대기 ${p.pending}`);
-    return bits.join("  ");
-  }
+  const projectLabel = (p) => p.name;
 
   const STATUS_TEXT = {
     pending: "대기",
@@ -97,11 +134,26 @@
     const projectSel = el("select", { class: "bim-select bim-project", title: "유니티 프로젝트" });
     const tagSel = el("select", { class: "bim-select bim-tag", title: "태그 (유니티 폴더)" });
     const go = label ? el("button", { class: "bim-go", type: "button", text: `▶ ${label}` }) : null;
-    const root = el("span", { class: `bim-picker${compact ? " bim-compact" : ""}` }, projectSel, tagSel, go);
+    const dot = el("span", { class: "bim-dot", role: "img" });
+    const root = el("span", { class: `bim-picker${compact ? " bim-compact" : ""}` }, dot, projectSel, tagSel, go);
+    const updateLive = (offline = false) => {
+      const p = state.boot?.projects?.find((x) => x.key === projectSel.value);
+      const st = offline ? "unknown" : !p ? "none" : p.running ? "on" : "off";
+      dot.className = `bim-dot bim-dot-${st}`;
+      const text = {
+        on: "유니티 실행 중 — 바로 임포트돼요",
+        off: `유니티 꺼짐 — 켜면 자동으로 임포트돼요${p?.pending ? ` (대기 ${p.pending}개)` : ""}`,
+        none: "프로젝트를 고르세요",
+        unknown: "로컬 앱에 연결할 수 없어요",
+      }[st];
+      dot.title = text;
+      dot.setAttribute("aria-label", text);
+    };
     let touched = false;
 
     const getChoice = () => (projectSel.value && tagSel.value ? { project: projectSel.value, tag: tagSel.value } : null);
     const changed = () => {
+      updateLive();
       if (go) go.disabled = !getChoice();
       onChange?.(getChoice());
     };
@@ -119,10 +171,13 @@
 
     const fill = () => {
       const boot = state.boot;
+      const keepProject = touched ? projectSel.value : "";
+      const keepTag = touched ? tagSel.value : undefined;
       projectSel.replaceChildren(el("option", { value: "", text: boot?.projects?.length ? "프로젝트 선택" : "프로젝트 없음 (관리에서 등록)" }));
       for (const p of boot?.projects || []) projectSel.append(el("option", { value: p.key, text: projectLabel(p) }));
-      if (boot?.lastProject && boot.projects.some((p) => p.key === boot.lastProject)) projectSel.value = boot.lastProject;
-      fillTags();
+      const want = keepProject || boot?.lastProject;
+      if (want && boot.projects.some((p) => p.key === want)) projectSel.value = want;
+      fillTags(keepProject ? keepTag : undefined);
     };
 
     const remember = () => {
@@ -169,6 +224,8 @@
       fillTags(e.detail.tag);
     });
     root.refill = fill;
+    root.updateLive = updateLive;
+    pickers.add(root);
     root.getChoice = getChoice;
     root.flash = () => {
       root.classList.remove("bim-attn");

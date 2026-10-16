@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Booth Import Manager",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "description": "BOOTH 라이브러리에서 바로 Unity로 임포트하고, 받은 파일과 찜목록을 관리합니다.",
   "permissions": [
     "downloads",
@@ -59,7 +59,7 @@
       "css": [
         "content/bim.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_end"
     },
     {
       "matches": [
@@ -77,7 +77,18 @@
       "css": [
         "content/bim.css"
       ],
-      "run_at": "document_idle"
+      "run_at": "document_end"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "manage.html"
+      ],
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ]
     }
   ]
 }

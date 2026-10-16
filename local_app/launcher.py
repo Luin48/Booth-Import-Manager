@@ -78,13 +78,17 @@ def _set_startup(enable: bool) -> None:
     )
 
 
-def _open_manage(url: str) -> None:
+def _open_manage(url: str) -> bool:
+    """크롬 확장 관리 페이지를 연다. 확장 ID 를 아직 모르면 아무것도 열지 않고 False."""
     ext_id = known_extension()
+    if not ext_id:
+        return False
     chrome = _chrome_path()
-    if ext_id and chrome:
+    if chrome:
         subprocess.Popen([chrome, f"chrome-extension://{ext_id}/manage.html"], creationflags=getattr(subprocess, "DETACHED_PROCESS", 0))
     else:
-        webbrowser.open(url)
+        webbrowser.open(url)  # 안내 페이지가 확장 관리 페이지로 넘겨준다
+    return True
 
 
 def _open_folder(path: str) -> None:
@@ -96,7 +100,7 @@ def _open_folder(path: str) -> None:
 
 
 # ---- 트레이 -----------------------------------------------------------------
-def _run_tray(server, server_thread: threading.Thread, url: str) -> bool:
+def _run_tray(server, server_thread: threading.Thread, url: str, notice: str = "") -> bool:
     """트레이 아이콘을 띄우고 종료될 때까지 막는다. pystray 가 없으면 False."""
     try:
         import pystray
@@ -124,7 +128,6 @@ def _run_tray(server, server_thread: threading.Thread, url: str) -> bool:
     menu = pystray.Menu(
         pystray.MenuItem(f"Booth Import Manager v{APP_VERSION}", None, enabled=False),
         pystray.MenuItem("관리 페이지 열기", lambda: _open_manage(url), default=True),
-        pystray.MenuItem("예전 웹 화면 열기", lambda: webbrowser.open(url)),
         pystray.MenuItem("보관 폴더 열기", lambda: _open_folder(get_config().intake_folder)),
         pystray.Menu.SEPARATOR,
         pystray.MenuItem("윈도우 시작 시 자동 실행", toggle_startup, checked=lambda _i: _startup_enabled()),
@@ -142,7 +145,16 @@ def _run_tray(server, server_thread: threading.Thread, url: str) -> bool:
             pass
 
     threading.Thread(target=watch_server, daemon=True).start()
-    icon.run()
+
+    def setup(ic):
+        ic.visible = True
+        if notice:
+            try:
+                ic.notify(notice, "Booth Import Manager")
+            except Exception:
+                pass
+
+    icon.run(setup=setup)
     return True
 
 
@@ -157,22 +169,18 @@ def main() -> None:
     url = f"http://127.0.0.1:{cfg.port}/"
 
     if _port_open(cfg.port):
-        # 이미 실행 중 — 두 번째 실행은 화면만 열고 끝낸다
-        if "--background" not in sys.argv:
-            _open_manage(url)
-        return
+        return  # 이미 실행 중 — 아무것도 열지 않는다
 
     server = ThreadingHTTPServer(("127.0.0.1", cfg.port), AppHandler)
     thread = threading.Thread(target=server.serve_forever, daemon=True)
     thread.start()
     time.sleep(0.3)
 
-    # --background: 윈도우 시작프로그램용. 화면을 열지 않고 트레이에만 상주.
-    if "--background" not in sys.argv:
-        _open_manage(url)
+    # 실행해도 페이지는 열지 않는다 — 트레이에만 상주 (관리 페이지는 트레이 메뉴/크롬 확장에서)
+    notice = "" if "--background" in sys.argv else "트레이에서 실행 중이에요. 관리 페이지는 트레이 아이콘 메뉴나 크롬 확장에서 열 수 있어요."
 
     try:
-        if not _run_tray(server, thread, url):
+        if not _run_tray(server, thread, url, notice):
             while thread.is_alive():
                 time.sleep(0.5)
     except KeyboardInterrupt:

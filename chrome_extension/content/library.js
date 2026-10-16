@@ -50,6 +50,103 @@
   const isLibrary = location.pathname.startsWith("/library");
   const collapsers = []; // 카드마다 setOpen(open)
   let collapseByDefault = false;
+  let pageSize = 10;
+  const PAGE_SIZES = [10, 20, 30, 50];
+
+  // ---- 페이지당 표시 개수 (부스는 10개 고정 → 다음 페이지들을 받아 이어 붙인다) ----
+  const pageParam = (url) => Math.max(1, parseInt(new URL(url, location.href).searchParams.get("page") || "1", 10) || 1);
+  function pageUrl(boothPage) {
+    const u = new URL(location.href);
+    if (boothPage <= 1) u.searchParams.delete("page");
+    else u.searchParams.set("page", String(boothPage));
+    return u.pathname + u.search;
+  }
+  function lastBoothPage(root = document) {
+    let max = pageParam(location.href);
+    for (const a of root.querySelectorAll(".pager a[href]")) max = Math.max(max, pageParam(a.getAttribute("href")));
+    return max;
+  }
+
+  // 받아온 카드의 Download 칸은 부스 스크립트가 그려주지 않으므로 직접 버튼을 만든다
+  function mountDownloadButtons(card) {
+    for (const holder of card.querySelectorAll(".js-download-button[data-href]")) {
+      if (holder.childElementCount) continue;
+      const href = holder.dataset.href;
+      const external = holder.dataset.isExternal === "true";
+      const btn = el("button", {
+        type: "button",
+        class: "charcoal-button !w-fit",
+        "data-variant": "Default",
+        "data-size": "S",
+        text: holder.dataset.label || "Download",
+        onclick: () => (external ? window.open(href, "_blank", "noopener") : (location.href = href)),
+      });
+      holder.append(el("div", { class: "relative w-fit" }, btn));
+    }
+  }
+
+  function renderPager(current, total, k) {
+    const old = document.querySelector(".pager:not(.bim-pager)");
+    if (!old) return;
+    old.style.display = "none";
+    document.querySelector(".bim-pager")?.remove();
+    const item = (v, text, extra = {}) =>
+      el("li", { class: v === current && !extra.arrow ? "current" : "" }, el("a", { class: "nav-item", href: pageUrl((v - 1) * k + 1), text, ...extra.attrs }));
+    const nums = [];
+    const from = Math.max(1, current - 2);
+    const to = Math.min(total, current + 2);
+    if (current > 1) nums.push(item(current - 1, "‹", { arrow: true, attrs: { rel: "prev", title: "이전" } }));
+    if (from > 1) nums.push(item(1, "1"), from > 2 ? el("li", { class: "page gap", text: "…" }) : null);
+    for (let v = from; v <= to; v += 1) nums.push(item(v, String(v)));
+    if (to < total) nums.push(to < total - 1 ? el("li", { class: "page gap", text: "…" }) : null, item(total, String(total)));
+    if (current < total) nums.push(item(current + 1, "›", { arrow: true, attrs: { rel: "next", title: "다음" } }));
+    old.after(el("div", { class: "pager border-0 bim-pager" }, el("nav", {}, el("ul", {}, nums.filter(Boolean)))));
+  }
+
+  async function expandPage(firstCard) {
+    if (!isLibrary || pageSize <= 10 || !firstCard) return;
+    const k = pageSize / 10;
+    const page = pageParam(location.href);
+    const start = Math.floor((page - 1) / k) * k + 1;
+    if (start !== page) {
+      location.replace(pageUrl(start)); // 묶음의 첫 페이지로 맞춘다
+      return "redirect";
+    }
+    const last = lastBoothPage();
+    const current = Math.floor((start - 1) / k) + 1;
+    const total = Math.ceil(last / k);
+    renderPager(current, total, k);
+    const container = firstCard.parentElement;
+    const pager = document.querySelector(".pager:not(.bim-pager)");
+    const loading = el("div", { class: "bim-loading-more", text: `다음 ${Math.min(start + k - 1, last) - start}페이지 불러오는 중…` });
+    (pager || container.lastElementChild).before(loading);
+    const pages = [];
+    for (let p = start + 1; p <= Math.min(start + k - 1, last); p += 1) pages.push(p);
+    const docs = await Promise.all(
+      pages.map((p) =>
+        fetch(pageUrl(p), { credentials: "include" })
+          .then((r) => (r.ok ? r.text() : ""))
+          .then((t) => (t ? new DOMParser().parseFromString(t, "text/html") : null))
+          .catch(() => null),
+      ),
+    );
+    const added = [];
+    for (const d of docs) {
+      if (!d) continue;
+      const seen = new Set();
+      for (const b of d.querySelectorAll(".js-download-button[data-href]")) {
+        const c = b.closest("div.bg-white");
+        if (!c || seen.has(c)) continue;
+        seen.add(c);
+        const card = document.importNode(c, true);
+        mountDownloadButtons(card);
+        loading.before(card);
+        added.push(card);
+      }
+    }
+    loading.remove();
+    return added;
+  }
 
   // 라이브러리 상단: 다운로드 항목 전체 펼치기/접기 + 기본값 기억
   function libraryBar(firstCard) {
@@ -57,6 +154,15 @@
     const remember = el("input", { type: "checkbox", checked: collapseByDefault });
     remember.checked = collapseByDefault;
     remember.addEventListener("change", () => chrome.storage.local.set({ libraryCollapsed: remember.checked }));
+    const sizeSel = el("select", { class: "bim-select bim-pagesize", title: "한 페이지에 보여줄 상품 수" }, PAGE_SIZES.map((n) => el("option", { value: String(n), text: `${n}개` })));
+    sizeSel.value = String(pageSize);
+    sizeSel.addEventListener("change", async () => {
+      const n = Number(sizeSel.value);
+      await chrome.storage.local.set({ libraryPageSize: n });
+      // 지금 보고 있는 첫 상품이 들어있는 묶음으로 이동
+      const first = pageParam(location.href);
+      location.href = pageUrl(Math.floor((first - 1) / (n / 10)) * (n / 10) + 1);
+    });
     const bar = el(
       "div",
       { id: "bim-libbar", class: "bim-libbar" },
@@ -65,6 +171,7 @@
       el("button", { class: "bim-toggle", type: "button", text: "▾ 모두 펼치기", onclick: () => collapsers.forEach((f) => f(true)) }),
       el("button", { class: "bim-toggle", type: "button", text: "▸ 모두 접기", onclick: () => collapsers.forEach((f) => f(false)) }),
       el("label", { class: "bim-libbar-check" }, remember, el("span", { text: "처음에 접어두기" })),
+      el("label", { class: "bim-libbar-size" }, el("span", { text: "페이지당" }), sizeSel),
     );
     firstCard.before(bar);
   }
@@ -220,11 +327,23 @@
       banner(`${error.message}`, "다시 시도", () => location.reload());
       return;
     }
-    if (isLibrary) collapseByDefault = (await chrome.storage.local.get("libraryCollapsed")).libraryCollapsed !== false;
+    if (isLibrary) {
+      const prefs = await chrome.storage.local.get(["libraryCollapsed", "libraryPageSize"]);
+      collapseByDefault = prefs.libraryCollapsed !== false;
+      pageSize = PAGE_SIZES.includes(prefs.libraryPageSize) ? prefs.libraryPageSize : 10;
+    }
     const cards = findCards();
+    if (pageSize > 10 && pageParam(location.href) % (pageSize / 10) !== 1 % (pageSize / 10)) {
+      if ((await expandPage(cards[0])) === "redirect") return;
+    }
     libraryBar(cards[0]);
     cards.forEach(decorate);
     refreshStatus();
+    const more = await expandPage(cards[0]);
+    if (Array.isArray(more) && more.length) {
+      findCards().forEach(decorate);
+      refreshStatus();
+    }
   }
 
   window.BIM.onMessage((msg) => {
