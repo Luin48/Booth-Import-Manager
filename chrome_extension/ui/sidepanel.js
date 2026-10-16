@@ -405,6 +405,18 @@ document.querySelectorAll(".tabs button").forEach((btn) =>
   }),
 );
 $("refreshBtn").addEventListener("click", load);
+async function syncThemeBtn() {
+  const { boothTheme } = await chrome.storage.local.get("boothTheme");
+  const dark = boothTheme === "dark";
+  $("themeBtn").textContent = dark ? "☀" : "☾";
+  $("themeBtn").title = dark ? "부스 테마: 다크 (누르면 라이트)" : "부스 테마: 라이트 (누르면 다크)";
+}
+$("themeBtn").addEventListener("click", async () => {
+  const { boothTheme } = await chrome.storage.local.get("boothTheme");
+  await chrome.storage.local.set({ boothTheme: boothTheme === "dark" ? "light" : "dark" });
+  syncThemeBtn();
+});
+syncThemeBtn();
 $("retryBtn").addEventListener("click", load);
 $("manageBtn").addEventListener("click", () => chrome.tabs.create({ url: chrome.runtime.getURL("manage.html") }));
 chrome.storage.onChanged.addListener((changes, area) => {

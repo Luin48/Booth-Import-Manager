@@ -627,12 +627,12 @@ async function renderSettings() {
   $("deleteLocal").checked = Boolean(c.deleteLocalAfterQueue);
   $("stayRunning").checked = c.stayRunning !== false;
   $("port").value = await getPort();
-  const { pageTheme } = await chrome.storage.local.get("pageTheme");
-  $("pageTheme").value = pageTheme || "auto";
+  const { boothTheme } = await chrome.storage.local.get("boothTheme");
+  $("boothTheme").value = boothTheme === "dark" ? "dark" : "light";
 }
-$("pageTheme").addEventListener("change", async (e) => {
-  await chrome.storage.local.set({ pageTheme: e.target.value });
-  saved("부스 페이지 테마 적용됨");
+$("boothTheme").addEventListener("change", async (e) => {
+  await chrome.storage.local.set({ boothTheme: e.target.value });
+  saved(e.target.value === "dark" ? "부스 다크 테마 적용됨" : "부스 라이트 테마 적용됨");
 });
 document.querySelectorAll(".pick").forEach((btn) =>
   btn.addEventListener("click", async () => {

@@ -28,7 +28,7 @@ from queue_manager import queue_for_unity
 from tag_state import load_tag_state, remove_asset_tag, set_asset_tag
 
 
-APP_VERSION = "0.3.2"
+APP_VERSION = "0.3.3"
 
 
 def _is_within(path: Path, root: Path) -> bool:

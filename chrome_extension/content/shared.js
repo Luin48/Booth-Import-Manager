@@ -87,14 +87,24 @@
   }
 
   /**
-   * 프로젝트 → 태그 → 버튼 순서의 선택기.
-   * onGo({ project, tag }) 를 호출한다.
+   * 프로젝트 → 태그 (→ 버튼) 선택기.
+   * - getChoice(): { project, tag } 또는 null
+   * - onChange(choice): 선택이 바뀔 때
+   * - onGo(choice): 버튼을 눌렀을 때 (label 이 없으면 버튼을 만들지 않음)
+   * 한 선택기에서 고르면, 사용자가 아직 직접 손대지 않은 다른 선택기도 같은 값으로 따라온다.
    */
-  function picker({ label = "Unity로", onGo, compact = false }) {
+  function picker({ label = "", onGo, onChange, compact = false }) {
     const projectSel = el("select", { class: "bim-select bim-project", title: "유니티 프로젝트" });
     const tagSel = el("select", { class: "bim-select bim-tag", title: "태그 (유니티 폴더)" });
-    const go = el("button", { class: "bim-go", type: "button", text: `▶ ${label}` });
+    const go = label ? el("button", { class: "bim-go", type: "button", text: `▶ ${label}` }) : null;
     const root = el("span", { class: `bim-picker${compact ? " bim-compact" : ""}` }, projectSel, tagSel, go);
+    let touched = false;
+
+    const getChoice = () => (projectSel.value && tagSel.value ? { project: projectSel.value, tag: tagSel.value } : null);
+    const changed = () => {
+      if (go) go.disabled = !getChoice();
+      onChange?.(getChoice());
+    };
 
     const fillTags = (keepValue) => {
       const projectKey = projectSel.value;
@@ -104,7 +114,7 @@
       for (const t of tags) tagSel.append(el("option", { value: t.name, text: t.name }));
       tagSel.disabled = !projectKey;
       if (tags.some((t) => t.name === remembered)) tagSel.value = remembered;
-      go.disabled = !projectKey || !tagSel.value;
+      changed();
     };
 
     const fill = () => {
@@ -115,21 +125,34 @@
       fillTags();
     };
 
-    projectSel.addEventListener("change", () => fillTags());
-    tagSel.addEventListener("change", () => {
-      go.disabled = !projectSel.value || !tagSel.value;
-    });
-    go.addEventListener("click", async (event) => {
-      event.preventDefault();
-      event.stopPropagation();
-      if (!projectSel.value || !tagSel.value) return;
-      const choice = { project: projectSel.value, tag: tagSel.value };
+    const remember = () => {
+      const choice = getChoice();
+      if (!choice) return;
       if (state.boot) {
         state.boot.lastProject = choice.project;
         state.boot.lastTagByProject = { ...(state.boot.lastTagByProject || {}), [choice.project]: choice.tag };
       }
       send("rememberChoice", choice).catch(() => {});
-      for (const other of document.querySelectorAll(".bim-picker")) other.dispatchEvent(new CustomEvent("bim-sync", { detail: choice }));
+      for (const other of document.querySelectorAll(".bim-picker")) {
+        if (other !== root) other.dispatchEvent(new CustomEvent("bim-sync", { detail: choice }));
+      }
+    };
+
+    projectSel.addEventListener("change", () => {
+      touched = true;
+      fillTags();
+      remember();
+    });
+    tagSel.addEventListener("change", () => {
+      touched = true;
+      changed();
+      remember();
+    });
+    go?.addEventListener("click", async (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const choice = getChoice();
+      if (!choice) return;
       go.disabled = true;
       go.classList.add("bim-busy");
       try {
@@ -139,17 +162,19 @@
         go.disabled = false;
       }
     });
-    // 한 곳에서 고르면 같은 페이지의 다른 선택기도 따라가게 (태그 복사 편의)
+    // 아직 직접 고르지 않은 선택기는 다른 곳에서 고른 값을 따라감
     root.addEventListener("bim-sync", (e) => {
-      if (root.contains(document.activeElement)) return;
-      if (projectSel.value !== e.detail.project) {
-        projectSel.value = e.detail.project;
-        fillTags(e.detail.tag);
-      } else if (!tagSel.value) {
-        fillTags(e.detail.tag);
-      }
+      if (touched) return;
+      projectSel.value = e.detail.project;
+      fillTags(e.detail.tag);
     });
     root.refill = fill;
+    root.getChoice = getChoice;
+    root.flash = () => {
+      root.classList.remove("bim-attn");
+      void root.offsetWidth;
+      root.classList.add("bim-attn");
+    };
     fill();
     return root;
   }
@@ -177,38 +202,7 @@
     }
   });
 
-  // ---- 다크 모드: 설정(pageTheme) = auto | dark | light ----------------------
-  function pageLooksDark() {
-    const pick = (el) => {
-      if (!el) return null;
-      const m = getComputedStyle(el).backgroundColor.match(/rgba?\(([^)]+)\)/);
-      if (!m) return null;
-      const [r, g, b, a = 1] = m[1].split(",").map((x) => parseFloat(x));
-      if (a === 0) return null;
-      return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    };
-    const lum = pick(document.body) ?? pick(document.documentElement) ?? pick(document.querySelector("main"));
-    if (lum !== null) return lum < 0.45;
-    return window.matchMedia?.("(prefers-color-scheme: dark)").matches || false;
-  }
-  let themeSetting = "auto";
-  function applyTheme() {
-    const dark = themeSetting === "dark" || (themeSetting === "auto" && pageLooksDark());
-    document.documentElement.classList.toggle("bim-dark", dark);
-  }
-  chrome.storage.local.get("pageTheme").then(({ pageTheme }) => {
-    themeSetting = pageTheme || "auto";
-    applyTheme();
-  });
-  chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && changes.pageTheme) {
-      themeSetting = changes.pageTheme.newValue || "auto";
-      applyTheme();
-    }
-  });
-  // 부스가 테마를 늦게 입히는 경우 대비
-  setTimeout(applyTheme, 800);
-  setTimeout(applyTheme, 2500);
+  // 다크/라이트는 theme.js 가 <html class="bim-dark"> 로 정한다 (설정: boothTheme)
 
   window.BIM = {
     send,

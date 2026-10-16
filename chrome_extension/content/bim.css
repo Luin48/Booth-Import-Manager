@@ -68,7 +68,7 @@ html.bim-dark {
   border-radius: 6px;
   background: var(--bim-field-bg);
   color: var(--bim-field-fg);
-  font: inherit;
+  font: 13px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
 }
 .bim-select:disabled { background: var(--bim-field-off-bg); color: var(--bim-field-off-fg); }
 .bim-go {
@@ -78,8 +78,7 @@ html.bim-dark {
   border-radius: 6px;
   background: var(--bim-btn-bg);
   color: var(--bim-btn-fg);
-  font: inherit;
-  font-weight: 600;
+  font: 600 13px/1 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -212,3 +211,45 @@ html.bim-dark {
 .bim-free { display: grid; gap: 4px; padding-top: 8px; border-top: 1px solid var(--bim-panel-line); }
 .bim-free-name { font-weight: 600; word-break: break-all; }
 html.bim-dark .bim-select option { background: var(--bim-field-bg); color: var(--bim-field-fg); }
+
+/* 다운로드 항목 옆 [Unity로] 버튼 */
+.bim-inline {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.bim-file-go { height: 28px; padding: 0 10px; font-size: 12px; }
+.bim-file-go.bim-off { opacity: 0.5; }
+.bim-picker.bim-attn { animation: bim-attn 0.9s ease 2; border-radius: 8px; }
+@keyframes bim-attn { 0%, 100% { box-shadow: 0 0 0 0 rgba(79, 183, 223, 0); } 50% { box-shadow: 0 0 0 4px rgba(79, 183, 223, 0.55); } }
+
+/* 다운로드 항목 접기/펼치기 */
+.bim-files-collapsed { display: none !important; }
+.bim-toggle {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--bim-field-line);
+  border-radius: 6px;
+  background: var(--bim-field-bg);
+  color: var(--bim-field-fg);
+  font: 600 12px/1 "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.bim-toggle:hover { border-color: var(--bim-btn-bg); }
+.bim-libbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--bim-bar-bg);
+  color: var(--bim-panel-fg);
+  font: 13px "Segoe UI", "Malgun Gothic", system-ui, sans-serif;
+}
+.bim-libbar-label { font-weight: 700; margin-right: 4px; }
+.bim-libbar-check { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; color: var(--bim-muted); cursor: pointer; }

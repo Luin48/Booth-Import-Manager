@@ -47,6 +47,28 @@
     return rows;
   }
 
+  const isLibrary = location.pathname.startsWith("/library");
+  const collapsers = []; // 카드마다 setOpen(open)
+  let collapseByDefault = false;
+
+  // 라이브러리 상단: 다운로드 항목 전체 펼치기/접기 + 기본값 기억
+  function libraryBar(firstCard) {
+    if (!isLibrary || !firstCard || document.getElementById("bim-libbar")) return;
+    const remember = el("input", { type: "checkbox", checked: collapseByDefault });
+    remember.checked = collapseByDefault;
+    remember.addEventListener("change", () => chrome.storage.local.set({ libraryCollapsed: remember.checked }));
+    const bar = el(
+      "div",
+      { id: "bim-libbar", class: "bim-libbar" },
+      el("span", { class: "bim-logo", text: "BIM" }),
+      el("span", { class: "bim-libbar-label", text: "다운로드 항목" }),
+      el("button", { class: "bim-toggle", type: "button", text: "▾ 모두 펼치기", onclick: () => collapsers.forEach((f) => f(true)) }),
+      el("button", { class: "bim-toggle", type: "button", text: "▸ 모두 접기", onclick: () => collapsers.forEach((f) => f(false)) }),
+      el("label", { class: "bim-libbar-check" }, remember, el("span", { text: "처음에 접어두기" })),
+    );
+    firstCard.before(bar);
+  }
+
   const registry = []; // { downloadableId, statusSlot, card }
   const cardRegistry = []; // { itemId, slot }
 
@@ -88,12 +110,19 @@
     const files = fileRows(card);
     if (!files.length) return;
 
-    // 카드 상단: 상품 전체 상태 + "전부" 버튼
+    // 에셋명 바로 아래: 이 상품의 프로젝트·태그 지정 (하나만) + 상태 + "전부" 버튼
     const cardSlot = el("span", { class: "bim-card-status" });
     cardRegistry.push({ itemId: info.itemId, slot: cardSlot });
-    const allPicker = picker({
-      label: `전부 Unity로 (${files.length})`,
+    const fileButtons = [];
+    const cardPicker = picker({
+      label: files.length > 1 ? `전부 Unity로 (${files.length})` : "",
       compact: true,
+      onChange: (choice) => {
+        for (const b of fileButtons) {
+          b.classList.toggle("bim-off", !choice);
+          b.title = choice ? `${projectName(choice.project)} / ${choice.tag} 로 임포트` : "위에서 프로젝트와 태그를 먼저 고르세요";
+        }
+      },
       onGo: async (choice) => {
         for (const f of files) {
           await unity(choice, info, f);
@@ -101,16 +130,58 @@
         }
       },
     });
-    const bar = el("div", { class: "bim-cardbar" }, el("span", { class: "bim-logo", text: "BIM" }), cardSlot, allPicker);
+    // 이 상품의 다운로드 항목 묶음 (라이브러리: 카드의 두 번째 칸 / 주문 상세: .list)
     const list = card.querySelector(".list");
+    const filesBox = list || files[0].row?.parentElement || null;
+    const toggle = el("button", { class: "bim-toggle", type: "button", title: "다운로드 항목 접기/펼치기" });
+    const setOpen = (open) => {
+      if (!filesBox) return;
+      filesBox.classList.toggle("bim-files-collapsed", !open);
+      toggle.textContent = `${open ? "▾" : "▸"} 파일 ${files.length}개`;
+      toggle.setAttribute("aria-expanded", String(open));
+    };
+    toggle.addEventListener("click", (e) => {
+      e.preventDefault();
+      setOpen(filesBox.classList.contains("bim-files-collapsed"));
+    });
+    collapsers.push(setOpen);
+    setOpen(!collapseByDefault);
+    const bar = el("div", { class: "bim-cardbar" }, el("span", { class: "bim-logo", text: "BIM" }), filesBox ? toggle : null, cardSlot, cardPicker);
     if (list) list.before(bar);
     else card.firstElementChild?.after(bar);
 
+    // 다운로드 항목: 기존 Download 버튼 왼쪽에 [Unity로] 버튼만
     for (const file of files) {
       const statusSlot = el("span", { class: "bim-file-status" });
       registry.push({ downloadableId: file.downloadableId, statusSlot });
-      const line = el("div", { class: "bim-fileline" }, statusSlot, picker({ onGo: (choice) => unity(choice, info, file) }));
-      (file.row || file.btn).after(line);
+      const btn = el("button", {
+        class: "bim-go bim-file-go",
+        type: "button",
+        text: "▶ Unity로",
+        onclick: async (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          const choice = cardPicker.getChoice();
+          if (!choice) {
+            toast("상품 이름 아래에서 프로젝트와 태그를 먼저 고르세요", "warn");
+            cardPicker.flash();
+            return;
+          }
+          btn.disabled = true;
+          btn.classList.add("bim-busy");
+          try {
+            await unity(choice, info, file);
+          } finally {
+            btn.disabled = false;
+            btn.classList.remove("bim-busy");
+          }
+        },
+      });
+      fileButtons.push(btn);
+      // Download 버튼을 감싼 칸이 가로 줄(flex) 안에 있으면 그 칸 앞에, 아니면 버튼 바로 앞에
+      const wrap = file.btn.parentElement;
+      const anchor = wrap && wrap.parentElement && getComputedStyle(wrap.parentElement).display.includes("flex") ? wrap : file.btn;
+      anchor.before(el("span", { class: "bim-inline" }, statusSlot, btn));
       // 부스 기본 Download 버튼을 눌러도 상품 정보는 남긴다 (태그 없이 보관 폴더로)
       file.btn.addEventListener(
         "click",
@@ -118,6 +189,13 @@
         true,
       );
     }
+    // 처음 상태 반영 (기억해 둔 프로젝트·태그가 있으면 바로 활성)
+    const initial = cardPicker.getChoice();
+    for (const b of fileButtons) b.classList.toggle("bim-off", !initial);
+  }
+
+  function projectName(key) {
+    return window.BIM.boot?.projects?.find((p) => p.key === key)?.name || key;
   }
 
   function banner(text, actionLabel, action) {
@@ -142,7 +220,10 @@
       banner(`${error.message}`, "다시 시도", () => location.reload());
       return;
     }
-    findCards().forEach(decorate);
+    if (isLibrary) collapseByDefault = (await chrome.storage.local.get("libraryCollapsed")).libraryCollapsed !== false;
+    const cards = findCards();
+    libraryBar(cards[0]);
+    cards.forEach(decorate);
     refreshStatus();
   }
 
