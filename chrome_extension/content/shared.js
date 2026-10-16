@@ -116,17 +116,38 @@
     downloaded: "받음",
   };
 
-  function statusChips(entry) {
+  const STATUS_ICON = { imported: "✓", queued: "⏳", downloading: "⏳", importing: "⏳", pending: "⏳", failed: "⚠", no_package: "–", cancelled: "×" };
+
+  /**
+   * 상태 배지.
+   * - full: 프로젝트마다 하나씩 (상품 페이지 패널처럼 자리가 넉넉할 때)
+   * - 기본(compact): 배지 하나 — 지금 고른 프로젝트(selected)의 상태 + 나머지는 "+N", 마우스를 올리면 전체 목록
+   */
+  function statusChips(entry, { selected = "", full = false } = {}) {
     const wrap = el("span", { class: "bim-chips" });
     if (!entry) return wrap;
-    const projects = entry.projects || [];
-    if (!projects.length && entry.status) {
-      wrap.append(el("span", { class: `bim-chip bim-st-${entry.status}`, text: STATUS_TEXT[entry.status] || entry.status }));
+    const projects = (entry.projects || []).filter((p) => p.status !== "cancelled");
+    if (!projects.length) {
+      if (entry.status && entry.status !== "cancelled") wrap.append(el("span", { class: `bim-chip bim-st-${entry.status}`, text: STATUS_TEXT[entry.status] || entry.status }));
+      return wrap;
     }
-    for (const p of projects) {
-      const label = `${p.projectName || "공용"} · ${STATUS_TEXT[p.status] || p.status}`;
-      wrap.append(el("span", { class: `bim-chip bim-st-${p.status}`, title: p.tag ? `태그: ${p.tag}` : "", text: label }));
+    const line = (p) => `${p.projectName || "공용"} · ${STATUS_TEXT[p.status] || p.status}${p.tag ? ` (${p.tag})` : ""}`;
+    if (full) {
+      for (const p of projects) wrap.append(el("span", { class: `bim-chip bim-st-${p.status}`, title: p.tag ? `태그: ${p.tag}` : "", text: `${p.projectName || "공용"} · ${STATUS_TEXT[p.status] || p.status}` }));
+      return wrap;
     }
+    const title = projects.map(line).join("\n");
+    // 진행 중 > 실패 > 고른 프로젝트 순으로 대표를 고른다
+    const rank = (p) => (["queued", "downloading", "importing", "pending"].includes(p.status) ? 3 : p.status === "failed" ? 2 : 0) + (p.project === selected ? 4 : 0);
+    const main = [...projects].sort((a, b) => rank(b) - rank(a))[0];
+    const others = projects.length - 1;
+    const mine = main.project === selected;
+    const chip = el("span", {
+      class: `bim-chip bim-st-${main.status}${mine ? "" : " bim-chip-other"}`,
+      title,
+      text: `${STATUS_ICON[main.status] || "•"} ${main.projectName || "공용"}${others ? ` +${others}` : ""}`,
+    });
+    wrap.append(chip);
     return wrap;
   }
 

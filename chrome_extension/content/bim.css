@@ -280,3 +280,6 @@ html.bim-dark .bim-preset-btn.bim-in-preset { background: #2e2650; color: #ddd6f
 .bim-dot-preset { background: #8b5cf6; box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.25); }
 .bim-picker.bim-preset-mode .bim-project { border-color: #a78bfa; color: #6d28d9; font-weight: 700; }
 html.bim-dark .bim-picker.bim-preset-mode .bim-project { color: #c4b5fd; }
+.bim-chip { cursor: default; white-space: nowrap; max-width: 16em; overflow: hidden; text-overflow: ellipsis; }
+.bim-chip-other { opacity: 0.7; }
+.bim-chips { display: inline-flex; flex-wrap: nowrap; }

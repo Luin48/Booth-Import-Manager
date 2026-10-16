@@ -124,7 +124,7 @@
       try {
         const st = await send("status", { itemIds: [item.id] });
         const entry = st.items?.[item.id];
-        statusSlot.replaceChildren(entry ? statusChips(entry) : el("span", { class: "bim-note", text: "아직 임포트한 프로젝트 없음" }));
+        statusSlot.replaceChildren(entry ? statusChips(entry, { full: true }) : el("span", { class: "bim-note", text: "아직 임포트한 프로젝트 없음" }));
       } catch {
         /* ignore */
       }

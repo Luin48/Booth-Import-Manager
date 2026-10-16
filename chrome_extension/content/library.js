@@ -323,8 +323,19 @@
     } catch {
       return;
     }
-    for (const r of registry) r.statusSlot.replaceChildren(statusChips(lastStatus.downloadables?.[r.downloadableId]));
-    for (const c of cardRegistry) c.slot.replaceChildren(statusChips(lastStatus.items?.[c.itemId]));
+    renderChips();
+  }
+
+  // 배지는 하나만: 상품 선택기에서 고른 프로젝트 기준 (+N, 마우스를 올리면 전체)
+  function renderChips(onlyCard) {
+    for (const r of registry) {
+      if (onlyCard && r.card !== onlyCard) continue;
+      r.statusSlot.replaceChildren(statusChips(lastStatus.downloadables?.[r.downloadableId], { selected: r.card.selected() }));
+    }
+    for (const c of cardRegistry) {
+      if (onlyCard && c !== onlyCard) continue;
+      c.slot.replaceChildren(statusChips(lastStatus.items?.[c.itemId], { selected: c.selected() }));
+    }
   }
 
   function decorate(card) {
@@ -334,14 +345,15 @@
     const files = fileRows(card);
     if (!files.length) return;
 
-    // 에셋명 바로 아래: 이 상품의 프로젝트·태그 지정 (하나만) + 상태 + "전부" 버튼
+    // 에셋명 바로 아래: 이 상품의 프로젝트·태그 지정 (하나만) + 상태 배지
     const cardSlot = el("span", { class: "bim-card-status" });
-    cardRegistry.push({ itemId: info.itemId, slot: cardSlot });
+    const cardEntry = { itemId: info.itemId, slot: cardSlot, selected: () => "" };
+    cardRegistry.push(cardEntry);
     const fileButtons = [];
     const cardPicker = picker({
-      label: files.length > 1 ? `전부 Unity로 (${files.length})` : "",
       compact: true,
       onChange: (choice, project) => {
+        if (cardEntry.ready) renderChips(cardEntry);
         const isPreset = project === PRESET;
         for (const b of fileButtons) {
           b.classList.toggle("bim-off", !choice);
@@ -349,13 +361,9 @@
           b.title = !choice ? "위에서 프로젝트와 태그를 먼저 고르세요" : `${projectName(choice.project)} / ${choice.tag} 로 임포트`;
         }
       },
-      onGo: async (choice) => {
-        for (const f of files) {
-          await unity(choice, info, f);
-          await new Promise((r) => setTimeout(r, 600));
-        }
-      },
     });
+    cardEntry.selected = () => cardPicker.getChoice()?.project || cardPicker.querySelector(".bim-project")?.value || "";
+    cardEntry.ready = true;
     // 이 상품의 다운로드 항목 묶음 (라이브러리: 카드의 두 번째 칸 / 주문 상세: .list)
     const list = card.querySelector(".list");
     const filesBox = list || files[0].row?.parentElement || null;
@@ -393,7 +401,7 @@
     // 다운로드 항목: 기존 Download 버튼 왼쪽에 [Unity로] 버튼만
     for (const file of files) {
       const statusSlot = el("span", { class: "bim-file-status" });
-      registry.push({ downloadableId: file.downloadableId, statusSlot });
+      registry.push({ downloadableId: file.downloadableId, statusSlot, card: cardEntry });
       const btn = el("button", {
         class: "bim-go bim-file-go",
         type: "button",
