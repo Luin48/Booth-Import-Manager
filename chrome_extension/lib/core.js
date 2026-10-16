@@ -650,25 +650,6 @@ export function presetChanges(entry, itemFiles) {
   return { added, removed, missing: !now_.has(entry.downloadableId) };
 }
 
-// ---- 라이브러리 목록 (유니티 썸네일 매칭 도구용) -------------------------------------
-// 다운로드\BoothImportManager\_bim\library.json 에 저장 → 유니티 'BIM 썸네일 매칭' 창이 읽는다.
-export const LIBRARY_FILE = `${QUEUE_FOLDER}/_bim/library.json`;
-
-export async function saveLibraryCatalog(items) {
-  const list = (items || []).filter((i) => i && i.itemId);
-  const data = { version: 1, savedAt: new Date().toISOString(), count: list.length, items: list };
-  const dataUrl = toDataUrl(JSON.stringify(data));
-  jsonTargets.set(dataUrl, LIBRARY_FILE);
-  const id = await chrome.downloads.download({ url: dataUrl, filename: LIBRARY_FILE, conflictAction: "overwrite", saveAs: false });
-  await chrome.storage.session.set({ [`json:${id}`]: "library" });
-  // 프리셋 업데이트 확인용 파일 목록도 같이 갱신
-  const files = {};
-  for (const i of list) if (i.files?.length) files[i.itemId] = i.files.map((f) => ({ id: f.id, label: f.label }));
-  await recordItemFiles(files).catch(() => {});
-  await chrome.storage.local.set({ libraryExport: { at: Date.now(), count: list.length } });
-  return { count: list.length, file: LIBRARY_FILE };
-}
-
 export async function getPresets() {
   return (await chrome.storage.local.get(PRESETS_KEY))[PRESETS_KEY] || [];
 }

@@ -285,51 +285,9 @@
       );
     }
     const bar = el("div", { id: "bim-libbar", class: "bim-libbar" }, ...parts);
-    const row = el("div", { class: "bim-libbar-row" }, presetControl());
-    if (isLibrary) row.append(exportButton());
-    bar.append(row);
+    bar.append(el("div", { class: "bim-libbar-row" }, presetControl()));
     firstCard.before(bar);
     renderPresetUi();
-    if (isLibrary && location.hash === "#bim-library-export") {
-      history.replaceState(null, "", location.pathname + location.search);
-      exportLibrary();
-    }
-  }
-
-  // 유니티 'BIM 썸네일 매칭' 창용: 라이브러리 전체 목록을 다운로드\BoothImportManager\_bim\library.json 으로
-  let exportBtn = null;
-  function exportButton() {
-    exportBtn = el("button", {
-      class: "bim-toggle bim-libbar-export",
-      type: "button",
-      title: "이미 설치한 에셋에 썸네일을 붙이는 유니티 'BIM 썸네일 매칭' 창에서 쓸 라이브러리 목록을 저장해요",
-      text: "🖼 썸네일 매칭용 목록 저장",
-      onclick: (e) => {
-        e.preventDefault();
-        exportLibrary();
-      },
-    });
-    return exportBtn;
-  }
-
-  async function exportLibrary() {
-    if (exportBtn?.disabled) return;
-    if (exportBtn) {
-      exportBtn.disabled = true;
-      exportBtn.textContent = "⏳ 라이브러리 읽는 중…";
-    }
-    toast("라이브러리 전체 목록을 읽는 중… (상품이 많으면 몇십 초 걸려요)", "info");
-    try {
-      const res = await send("libraryExport");
-      toast(`썸네일 매칭용 목록 저장 완료 — 상품 ${res.count}개. 유니티 'BIM 썸네일 매칭' 창에서 바로 쓸 수 있어요`, "ok");
-    } catch (error) {
-      toast(error.message, "error");
-    } finally {
-      if (exportBtn) {
-        exportBtn.disabled = false;
-        exportBtn.textContent = "🖼 썸네일 매칭용 목록 저장";
-      }
-    }
   }
 
   const registry = []; // { downloadableId, statusSlot, card }

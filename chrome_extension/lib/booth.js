@@ -139,51 +139,6 @@ export async function pageCollectLibraryFiles(maxPages) {
   return items;
 }
 
-// ---- 주입용: 라이브러리 전체 목록 (썸네일 매칭용: 상품·샵·썸네일·파일 이름) ----------
-export async function pageCollectLibraryCatalog(maxPages) {
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-  const items = new Map();
-  const isItem = (a) => /booth\.pm\/(?:[\w-]+\/)?items\/\d+/.test(a.href) && !/twitter|x\.com|intent/.test(a.href);
-  const parse = (html, gift) => {
-    const doc = new DOMParser().parseFromString(html, "text/html");
-    const cards = new Set(
-      [...doc.querySelectorAll(".js-download-button[data-href], .l-library-item-thumbnail")].map((b) => b.closest("div.bg-white")).filter(Boolean),
-    );
-    for (const card of cards) {
-      const links = [...card.querySelectorAll('a[href*="/items/"]')].filter(isItem);
-      const id = links[0]?.href.match(/items\/(\d+)/)?.[1];
-      if (!id) continue;
-      const shop = [...card.querySelectorAll("a")].find((a) => /^https:\/\/[^/]+\.booth\.pm\/?$/.test(a.href) && !a.href.includes("accounts."));
-      const entry = items.get(id) || {
-        itemId: id,
-        name: (links.map((a) => a.textContent.trim()).find(Boolean) || card.querySelector(".font-bold")?.textContent || "").trim(),
-        shopName: (shop?.textContent || "").trim(),
-        shopUrl: shop?.href || "",
-        thumbnail: card.querySelector("img.l-library-item-thumbnail, img")?.getAttribute("src") || "",
-        gift,
-        files: [],
-      };
-      for (const b of card.querySelectorAll(".js-download-button[data-href]")) {
-        const dl = b.dataset.href.match(/downloadables\/(\d+)/)?.[1];
-        if (!dl || entry.files.some((f) => f.id === dl)) continue;
-        const row = b.closest(".desktop\\:flex") || b.parentElement?.parentElement?.parentElement;
-        entry.files.push({ id: dl, label: (row?.querySelector(".min-w-0")?.textContent || "").trim() });
-      }
-      items.set(id, entry);
-    }
-    return cards.size;
-  };
-  for (const [base, gift] of [["/library", false], ["/library/gifts", true]]) {
-    for (let page = 1; page <= maxPages; page += 1) {
-      const res = await fetch(`${base}?page=${page}`, { credentials: "include" });
-      if (!res.ok) break;
-      if (!parse(await res.text(), gift)) break;
-      await sleep(250);
-    }
-  }
-  return [...items.values()];
-}
-
 // ---- 주입용: booth.pm 에서 상품 JSON 여러 개 조회 -------------------------
 export async function pageFetchItems(ids) {
   const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
