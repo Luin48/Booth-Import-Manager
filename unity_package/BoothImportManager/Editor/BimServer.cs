@@ -239,6 +239,7 @@ namespace BoothImportManager
             public string chromeDownloads;
             public bool busy;
             public string current;
+            public long iconStamp;   // 폴더 아이콘 기록이 바뀌면 달라짐 → 확장이 /bim/installed 를 다시 읽음
             public int pending;
             public bool autoImport;
             public string lastLog;
@@ -254,6 +255,8 @@ namespace BoothImportManager
         [Serializable] private class RequeueRequest { public string archivedPath; public BimJobRunner.Job job; }
         [Serializable] private class PathRequest { public string path; public string initial; public string title; }
         [Serializable] private class PathResponse { public string path; public string result; }
+        [Serializable] private class InstalledItem { public string itemId; public string title; public string folder; }
+        [Serializable] private class InstalledResponse { public string key; public long iconStamp; public List<InstalledItem> items = new List<InstalledItem>(); }
 
         private static PingResponse Ping()
         {
@@ -270,6 +273,7 @@ namespace BoothImportManager
                 keepArchive = shared.keepArchive,
                 chromeDownloads = BimContext.ChromeDownloadsDir(),
                 busy = BimJobRunner.Busy,
+                iconStamp = BoothFolderIcons.Stamp,
                 current = BimJobRunner.CurrentFile,
                 pending = BimJobRunner.PendingCount,
                 autoImport = autoImportCache,
@@ -358,6 +362,24 @@ namespace BoothImportManager
                     Directory.CreateDirectory(r.path);
                     BimContext.Post(() => EditorUtility.RevealInFinder(r.path));
                     return JsonUtility.ToJson(new PathResponse { path = r.path, result = "ok" });
+                }
+
+                case "/bim/installed":
+                {
+                    // 이 프로젝트에 들어 있는 부스 상품 = 상품 썸네일 아이콘이 붙은 폴더 (BIM 임포트 + 썸네일 매칭)
+                    var res = BimContext.RunOnMain(() =>
+                    {
+                        var r = new InstalledResponse { key = BimContext.ProjectKey, iconStamp = BoothFolderIcons.Stamp };
+                        foreach (var e in BoothFolderIcons.All())
+                        {
+                            if (e.kind != "item" || string.IsNullOrEmpty(e.itemId)) continue;
+                            var folder = AssetDatabase.GUIDToAssetPath(e.guid);
+                            if (string.IsNullOrEmpty(folder)) continue; // 지워진 폴더
+                            r.items.Add(new InstalledItem { itemId = e.itemId, title = e.title, folder = folder });
+                        }
+                        return r;
+                    }, 15000);
+                    return JsonUtility.ToJson(res);
                 }
 
                 case "/bim/scan-queue":
