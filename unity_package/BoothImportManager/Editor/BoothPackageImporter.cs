@@ -386,6 +386,101 @@ namespace BoothImportManager
             }
         }
 
+        // ---- unitypackage 가 없는 상품 (텍스쳐·머티리얼만 든 zip, 이미지 단일 파일 등) ----------
+        private static readonly HashSet<string> SkipFileNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { ".DS_Store", "Thumbs.db", "desktop.ini" };
+        private static readonly HashSet<string> SkipExtensions = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ".blend", ".blend1", ".zip", ".rar", ".7z", ".exe", ".lnk", ".url", ".unitypackage",
+        };
+
+        /// <summary>유니티에 넣을 파일인지 (맥 찌꺼기, 블렌더 원본(블렌더 없으면 오류), 압축·실행 파일 제외)</summary>
+        public static bool IsLooseFile(string path)
+        {
+            var p = (path ?? "").Replace('\\', '/');
+            if (p.Split('/').Any(part => part == "__MACOSX" || part.StartsWith("._"))) return false;
+            var name = Path.GetFileName(p);
+            if (string.IsNullOrEmpty(name) || SkipFileNames.Contains(name)) return false;
+            return !SkipExtensions.Contains(Path.GetExtension(name));
+        }
+
+        /// <summary>
+        /// unitypackage 가 없는 상품: [에셋 루트]/[태그]/[샵 이름]/[상품 이름] 폴더를 만들어 파일을 그대로 넣는다.
+        /// baseDir 기준 하위 폴더 구조는 유지하고, 같이 든 .meta 도 복사해서 GUID(머티리얼 → 텍스쳐 연결)를 지킨다.
+        /// 같은 샵 사진이 붙은 샵 폴더가 이미 태그 폴더에 있으면 그 폴더를 쓴다. 돌려주는 값: 상품 폴더 경로
+        /// </summary>
+        public static string ImportLooseFiles(string baseDir, IList<string> files, string tag, string assetRoot, BoothFolderIcons.BoothMeta meta)
+        {
+            var root = NormalizeAssetPath(string.IsNullOrWhiteSpace(assetRoot) ? BoothImportSettings.instance.AssetRootFolder : assetRoot);
+            var targetRoot = string.IsNullOrWhiteSpace(tag) || tag == UntaggedTagName ? root : $"{root}/{SanitizeFolderName(tag)}";
+            EnsureFolder(targetRoot);
+
+            var item = CleanFolderName(meta?.itemName);
+            if (string.IsNullOrEmpty(item)) item = CleanFolderName(meta?.packageName);
+            if (string.IsNullOrEmpty(item)) item = "미분류";
+            var shopFolder = FindShopFolder(targetRoot, meta);
+            if (shopFolder == null)
+            {
+                var shop = CleanFolderName(meta?.shopName);
+                if (!string.IsNullOrEmpty(shop)) shopFolder = $"{targetRoot}/{shop}";
+            }
+            var itemFolder = $"{shopFolder ?? targetRoot}/{item}";
+            EnsureFolder(itemFolder);
+
+            var destAbs = ToAbsPath(itemFolder);
+            var baseFull = Path.GetFullPath(baseDir).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            foreach (var file in files)
+            {
+                var full = Path.GetFullPath(file);
+                var rel = full.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase) ? full.Substring(baseFull.Length) : Path.GetFileName(full);
+                var target = Path.Combine(destAbs, rel);
+                Directory.CreateDirectory(Path.GetDirectoryName(target) ?? destAbs);
+                File.Copy(full, target, true);
+                var meta_ = full + ".meta";
+                if (File.Exists(meta_) && !File.Exists(target + ".meta")) File.Copy(meta_, target + ".meta");
+            }
+            AssetDatabase.Refresh();
+
+            if (meta != null && !string.IsNullOrEmpty(meta.itemId))
+            {
+                try
+                {
+                    if (!string.IsNullOrEmpty(meta.itemThumb)) BoothFolderIcons.Assign(itemFolder, "item", meta.itemThumb, meta);
+                    if (shopFolder != null && !string.IsNullOrEmpty(meta.shopIcon) && !BoothFolderIcons.HasIcon(AssetDatabase.AssetPathToGUID(shopFolder)))
+                        BoothFolderIcons.Assign(shopFolder, "shop", meta.shopIcon, meta);
+                }
+                catch (Exception e) { Debug.LogWarning($"[BoothImportManager] Folder icon failed: {e.Message}"); }
+            }
+            return itemFolder;
+        }
+
+        /// <summary>태그 폴더 바로 아래에 같은 샵 사진이 붙은 폴더가 있으면 (예: unitypackage 가 만든 "#ShopName")</summary>
+        private static string FindShopFolder(string targetRoot, BoothFolderIcons.BoothMeta meta)
+        {
+            if (meta == null || string.IsNullOrEmpty(meta.shopName) && string.IsNullOrEmpty(meta.shopUrl)) return null;
+            foreach (var e in BoothFolderIcons.All())
+            {
+                if (e.kind != "shop") continue;
+                var same = !string.IsNullOrEmpty(meta.shopUrl) && string.Equals(e.url?.TrimEnd('/'), meta.shopUrl.TrimEnd('/'), StringComparison.OrdinalIgnoreCase)
+                           || !string.IsNullOrEmpty(meta.shopName) && e.title == meta.shopName;
+                if (!same) continue;
+                var path = AssetDatabase.GUIDToAssetPath(e.guid);
+                if (!string.IsNullOrEmpty(path) && ParentPath(path) == targetRoot && AssetDatabase.IsValidFolder(path)) return path;
+            }
+            return null;
+        }
+
+        /// <summary>폴더 이름용: 【8アバター対応】 같은 꾸밈 괄호 떼고, 못 쓰는 글자 바꾸고, 너무 길면 자름</summary>
+        private static string CleanFolderName(string name)
+        {
+            if (string.IsNullOrWhiteSpace(name)) return "";
+            var cleaned = System.Text.RegularExpressions.Regex.Replace(name, @"【[^】]*】|\[[^\]]*\]", " ");
+            if (string.IsNullOrWhiteSpace(cleaned)) cleaned = name;
+            cleaned = System.Text.RegularExpressions.Regex.Replace(cleaned, @"\s+", " ").Trim(' ', '.', '-', '_', '/');
+            foreach (var c in Path.GetInvalidFileNameChars()) cleaned = cleaned.Replace(c, '_');
+            if (cleaned.Length > 60) cleaned = cleaned.Substring(0, 60).TrimEnd(' ', '.');
+            return cleaned;
+        }
+
         private static void EnsureFolder(string path)
         {
             path = NormalizeAssetPath(path);
