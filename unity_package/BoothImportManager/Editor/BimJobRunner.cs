@@ -69,6 +69,8 @@ namespace BoothImportManager
             public string source;
             public string phase;       // prepare | import
             public string[] packages;
+            public string[] loose;         // unitypackage 가 없을 때 그대로 넣을 파일
+            public string looseBase;
             public int index;
             public string extractDir;
             public bool legacy;
@@ -79,7 +81,16 @@ namespace BoothImportManager
 
         private static State state;
         private static bool loaded;
-        private static Task<List<string>> prepareTask;
+        private static Task<Prepared> prepareTask;
+
+        /// <summary>준비 결과: 임포트할 unitypackage 들, 없으면 그대로 넣을 파일들(텍스쳐·머티리얼 등)</summary>
+        private class Prepared
+        {
+            public List<string> packages = new List<string>();
+            public List<string> loose = new List<string>();
+            public string looseBase;
+            public string note;
+        }
         private static double nextScan;
         private static int pendingCount;
         private static string lastLog = "";
@@ -337,14 +348,41 @@ namespace BoothImportManager
                 try { BimNet.EnsureThumbs(meta); }
                 catch { /* 아이콘은 없어도 됨 */ }
 
+                var result = new Prepared();
                 if (source.EndsWith(".unitypackage", StringComparison.OrdinalIgnoreCase))
-                    return new List<string> { source };
-                if (!BimZip.IsZip(source)) return new List<string>();
+                {
+                    result.packages.Add(source);
+                    return result;
+                }
+                var ext = Path.GetExtension(source).ToLowerInvariant();
+                if (!BimZip.IsZip(source))
+                {
+                    if (ext == ".rar" || ext == ".7z")
+                    {
+                        result.note = $"{ext} 압축은 아직 풀 수 없어요 (zip 만 지원)";
+                        return result;
+                    }
+                    // 압축이 아닌 단일 파일 (png, psd 등) → 그대로 넣기
+                    if (BoothPackageImporter.IsLooseFile(source))
+                    {
+                        result.loose.Add(source);
+                        result.looseBase = Path.GetDirectoryName(source);
+                    }
+                    return result;
+                }
                 if (Directory.Exists(extractDir)) Directory.Delete(extractDir, true);
                 var files = BimZip.Extract(source, extractDir);
-                return files.Where(f => f.EndsWith(".unitypackage", StringComparison.OrdinalIgnoreCase))
+                result.packages = files.Where(f => f.EndsWith(".unitypackage", StringComparison.OrdinalIgnoreCase))
                     .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
                     .ToList();
+                if (result.packages.Count > 0) return result;
+
+                // unitypackage 가 없으면: 텍스쳐·머티리얼 등을 [샵]/[상품] 폴더로 그대로 넣는다
+                result.loose = files.Where(f => BoothPackageImporter.IsLooseFile(f.Substring(extractDir.Length)))
+                    .OrderBy(f => f, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                result.looseBase = CommonFolder(result.loose, extractDir);
+                return result;
             });
         }
 
@@ -367,15 +405,41 @@ namespace BoothImportManager
                     Finish("failed", error);
                     return;
                 }
-                state.packages = task.Result.ToArray();
+                state.packages = task.Result.packages.ToArray();
                 if (state.packages.Length == 0)
                 {
-                    Finish("no_package", "안에 .unitypackage 가 없어요");
-                    return;
+                    if (task.Result.loose.Count == 0)
+                    {
+                        Finish("no_package", task.Result.note ?? "유니티에 넣을 파일이 없어요");
+                        return;
+                    }
+                    state.loose = task.Result.loose.ToArray();
+                    state.looseBase = task.Result.looseBase;
+                    state.phase = "loose";
+                    Save();
                 }
-                state.phase = "import";
-                state.index = 0;
-                Save();
+                else
+                {
+                    state.phase = "import";
+                    state.index = 0;
+                    Save();
+                }
+            }
+
+            if (state.phase == "loose")
+            {
+                try
+                {
+                    Log($"unitypackage 없음 → 파일 {state.loose.Length}개를 샵/상품 폴더로");
+                    var folder = BoothPackageImporter.ImportLooseFiles(state.looseBase, state.loose, state.job.tag, state.job.assetRoot, state.meta);
+                    if (!state.importedTo.Contains(folder)) state.importedTo.Add(folder);
+                    Finish("imported", null);
+                }
+                catch (Exception e)
+                {
+                    Finish("failed", e.Message);
+                }
+                return;
             }
 
             if (state.phase == "import")
@@ -390,6 +454,25 @@ namespace BoothImportManager
                 var failedAll = state.errors.Count >= state.packages.Length;
                 Finish(failedAll ? "failed" : "imported", state.errors.Count > 0 ? string.Join(" / ", state.errors) : null);
             }
+        }
+
+        /// <summary>파일들이 모두 한 폴더 아래 있으면 그 폴더 (zip 안의 감싸는 폴더는 빼고 넣기 위해)</summary>
+        private static string CommonFolder(List<string> files, string root)
+        {
+            if (files.Count == 0) return root;
+            var dirs = files.Select(f => (Path.GetDirectoryName(f) ?? root).TrimEnd(Path.DirectorySeparatorChar)).ToList();
+            var common = dirs[0];
+            foreach (var d in dirs.Skip(1))
+            {
+                while (!(d.Equals(common, StringComparison.OrdinalIgnoreCase) || d.StartsWith(common + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var parent = Path.GetDirectoryName(common);
+                    if (string.IsNullOrEmpty(parent)) return root;
+                    common = parent;
+                }
+            }
+            var rootFull = root.TrimEnd(Path.DirectorySeparatorChar);
+            return common.Length >= rootFull.Length ? common : root;
         }
 
         /// <summary>패키지 하나 임포트가 끝나면 BoothPackageImporter 가 부른다.</summary>
